@@ -1,0 +1,99 @@
+# frozen_string_literal: true
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 p4535992 and contributors.
+
+# Run against an existing, migrated Redmine installation with AI Helper and
+# this extension installed. This is a real-environment registration smoke
+# check, not a substitute for document/ACL integration tests.
+#
+# From the Redmine root:
+#   RAILS_ENV=test bundle exec ruby plugins/redmine_ai_helper_extension_dmfs/test/redmine_smoke.rb
+#
+# For a script stored outside plugins, also set REDMINE_ROOT=/path/to/redmine.
+# The assertions below perform no document search, download, LLM request,
+# setting update or database migration. Redmine boots normally first.
+
+unless defined?(Rails) && Rails.application&.initialized?
+  ENV["RAILS_ENV"] ||= "test"
+  redmine_root = ENV.fetch("REDMINE_ROOT") { File.expand_path("../../..", __dir__) }
+  environment = File.join(redmine_root, "config/environment.rb")
+  abort "Redmine environment not found; set REDMINE_ROOT to the Redmine installation." unless File.file?(environment)
+
+  require environment
+end
+
+module RedmineAiHelperDmsfSmoke
+  # Abort on the first failed contract; never present a partial run as success.
+  def self.check(label, condition)
+    raise "FAIL: #{label}" unless condition
+
+    puts "PASS: #{label}"
+  end
+
+  def self.run
+    plugin = Redmine::Plugin.find(:redmine_ai_helper_extension_dmfs)
+    check("plugin version", plugin.version == RedmineAiHelperDmsf::VERSION)
+
+    agent_class = RedmineAiHelperDmsf::DmsfExtensionAgent
+    tools_class = RedmineAiHelperDmsf::DmsfTools
+    registered = RedmineAiHelper::AgentList.instance.find_agent("dmsf_extension_agent")
+    check("automatic agent registration", registered && registered[:class] == agent_class.name)
+
+    # BaseAgent#initialize constructs an LLM provider. Allocate without calling
+    # it because the tested methods need no provider, project or conversation.
+    agent = agent_class.allocate
+    check("extension tool provider", agent.available_tool_providers == [tools_class])
+    check("exactly two tool definitions", tools_class.function_registry.keys.sort == %i[analyze_file search_files])
+    tool_classes = tools_class.tool_classes
+    check("exactly two generated tools", tool_classes.length == 2)
+    check("all tools are read-only", tool_classes.all? { |tool| tool.write_tool? == false })
+
+    settings = AiHelperSetting.order(:id).first
+    raise "Configure AI Helper settings in this environment before running the smoke check." unless settings
+
+    expected_enabled = !!(tools_class.available? && ENV["REDMINE_AI_HELPER_DMSF_ENABLED"] == "1" &&
+                          settings.attachment_send_enabled?)
+    check("tools follow current activation settings", tools_class.enabled? == expected_enabled)
+    check("agent follows current activation settings", agent.enabled? == expected_enabled)
+    puts "DMSF agent state: #{expected_enabled ? 'enabled' : 'disabled'}"
+
+    check_backstories(agent)
+    puts "Registration smoke checks passed; document access and model execution were not exercised."
+  end
+
+  def self.check_backstories(agent)
+    key = "redmine_ai_helper_dmsf.agent_backstory"
+    upstream_loader = RedmineAiHelper::Util::PromptLoader.singleton_class
+    upstream_calls = []
+    tracer = TracePoint.new(:call) do |event|
+      upstream_calls << event.method_id if event.defined_class == upstream_loader && event.method_id == :load_template
+    end
+
+    tracer.enable do
+      %i[en it ja].each do |locale|
+        I18n.with_locale(locale) do
+          expected = I18n.t(key, locale: locale, raise: true)
+          check("#{locale} backstory uses extension translations", agent.backstory == expected && !expected.empty?)
+        end
+      end
+
+      # Use a real Redmine locale without an extension-specific translation.
+      # Do not change global locale validation, fallback settings or translations.
+      fallback_locale = I18n.available_locales.find do |locale|
+        !%i[en it ja].include?(locale.to_sym) && !I18n.exists?(key, locale, fallback: false)
+      end
+      if fallback_locale
+        I18n.with_locale(fallback_locale) do
+          check("English backstory fallback", agent.backstory == I18n.t(key, locale: :en, raise: true))
+        end
+      else
+        puts "SKIP: English fallback (no untranslated Redmine locale is enabled)"
+      end
+    end
+    check("backstory is independent of upstream prompt files", upstream_calls.empty?)
+  end
+end
+
+# Reject accidental writes from settings access during assertions. In particular,
+# upstream's settings getter otherwise creates a record when none exists.
+ActiveRecord::Base.while_preventing_writes { RedmineAiHelperDmsfSmoke.run }
