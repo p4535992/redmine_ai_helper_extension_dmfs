@@ -6,11 +6,16 @@ The initial implementation was checked against the pinned source APIs listed in
 [compatibility.md](compatibility.md), including the real DMSF folder ACL gate,
 the Active Storage transition and AI Helper's agent registration/DSL.
 
-The authoring environment has no Ruby executable or Redmine installation.
-Consequently the Ruby test suite, Ruby syntax checks, real plugin boot and
-end-to-end model calls **have not been executed there**. Static file checks and
-locale parsing are not a substitute for those checks. Do not describe the
-version matrix as runtime-tested until these checks are actually run.
+The initial authoring environment had no Ruby executable or Redmine installation,
+so the original extraction did not execute Ruby tests there. The
+[Release workflow](releasing.md) now runs Ruby syntax checks and the standalone
+suite on Ruby 3.2, 3.3 and 3.4, and publishes only when those jobs succeed.
+Consult the corresponding Actions run for its actual result. Static file
+checks and locale parsing are not a substitute for test execution.
+
+The workflow still does not boot a real Redmine application or call a model.
+The Redmine/DMSF compatibility matrix remains a source assessment until the
+real-installation checks below are run on the intended combination.
 
 ## Standalone behavior tests
 

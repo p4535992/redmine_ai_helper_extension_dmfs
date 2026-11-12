@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - version.rb
+      - CHANGELOG.md
+      - .github/workflows/release.yml
+      - scripts/build_release.py
+      - scripts/publish_release.py
+      - test/release/**
+      - test/standalone/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  validate:
+    name: Validate Ruby ${{ matrix.ruby }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ['3.2', '3.3', '3.4']
+    steps:
+      - name: Check out the triggering commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: false
+
+      - name: Install the standalone test dependency
+        run: gem install minitest --version 5.25.5 --no-document
+
+      - name: Check Ruby syntax
+        run: git ls-files -z -- '*.rb' | xargs -0 -r -n 1 ruby -c
+
+      - name: Run standalone plugin tests
+        run: ruby -Itest/standalone test/standalone/dmsf_tools_test.rb
+
+      - name: Test release packaging and publication guards
+        if: matrix.ruby == '3.2'
+        run: python3 -m unittest discover -s test/release -p 'test_*.py' -v
+
+  publish:
+    name: Package and publish
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the tested commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Build and verify installable archives
+        run: python3 scripts/build_release.py --output-dir dist
+
+      - name: Publish the version in version.rb
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_release.py --directory dist

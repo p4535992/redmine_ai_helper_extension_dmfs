@@ -9,6 +9,11 @@ It uses AI Helper's custom-agent extension mechanism, following
 [Compatibility and API contracts](docs/compatibility.md) ·
 [Testing](docs/testing.md) · [Licenses and provenance](THIRD_PARTY_NOTICES.md)
 
+Installable ZIP/TAR.GZ packages and SHA-256 checksums are published under
+[GitHub Releases](https://github.com/p4535992/redmine_ai_helper_extension_dmfs/releases).
+The [release workflow](docs/releasing.md) validates the plugin on Ruby 3.2, 3.3
+and 3.4 before publishing a new version.
+
 **Version:** 0.1.0 · **License:** GPL-3.0-or-later, with the original MIT notices
 preserved for adapted AI Helper code.
 

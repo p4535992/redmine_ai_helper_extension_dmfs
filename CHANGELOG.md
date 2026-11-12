@@ -18,5 +18,7 @@
   non-integer IDs.
 - Add standalone behavior tests, a real-Redmine registration smoke check,
   installation instructions, compatibility evidence and explicit test status.
+- Add a GitHub Actions release workflow with a Ruby 3.2/3.3/3.4 validation
+  matrix, installable ZIP/TAR.GZ archives, SHA-256 checksums and changelog notes.
 - License the extension GPL-3.0-or-later and preserve the original MIT notice
   and source provenance.

@@ -6,6 +6,11 @@ documenti DMSF** alla chat di AI Helper.
 [English documentation](README.md) · [Compatibilità](docs/compatibility.md) ·
 [Test](docs/testing.md) · [Licenze e provenienza](THIRD_PARTY_NOTICES.md)
 
+I pacchetti installabili ZIP/TAR.GZ e i checksum SHA-256 vengono pubblicati nelle
+[Release GitHub](https://github.com/p4535992/redmine_ai_helper_extension_dmfs/releases).
+Il [workflow di release](docs/releasing.md) esegue i controlli e i test autonomi
+su Ruby 3.2, 3.3 e 3.4 prima di pubblicare una nuova versione.
+
 Versione **0.1.0**. Licenza **GPL-3.0-or-later**, con conservazione degli avvisi
 MIT originali per il codice adattato da AI Helper.
 
