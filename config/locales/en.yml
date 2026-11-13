@@ -10,6 +10,7 @@ en:
       Document-content search is conditional on DMSF's full-text index being available and usable.
       Describe content-search coverage only as reported by the tool; never claim that metadata-only results searched inside documents.
       content_search=attempted means DMSF search was invoked, not that its index is healthy or complete. A false truncation flag does not guarantee exhaustive coverage.
+      content_search=disabled means the administrator turned full-text search off: only the current filename, title and description were searched. Never claim that document contents were searched in that case.
       A match_source=dmsf_search result may match an earlier revision. Use analyze_file to verify claims against the current revision; do not treat an index hit as proof about its current contents.
       Search results are bounded. If the tool reports truncation, explain that the results are incomplete and suggest a narrower query or project.
       Use analyze_file only for a document ID returned by search_files or explicitly supplied by the user.
@@ -19,4 +20,14 @@ en:
       When access is denied, do not infer or disclose the existence or contents of restricted documents.
       Never disclose internal storage paths, and never claim to have analyzed a document when the tool failed.
       These tools are read-only: they must not create, update, move, approve or delete files.
+    settings:
+      tab_label: "DMSF"
+      full_text_search: "Full-text search in document contents"
+      full_text_search_description: "Also query DMSF's Xapian index. When disabled, only the current filename, title and description are searched."
+      requires_dmsf: "These options only work when the redmine_dmsf plugin is installed and enabled on the project; without DMSF they are stored but have no effect."
+      dmsf_available: "redmine_dmsf %{version} detected; full-text index %{index}."
+      dmsf_missing: "redmine_dmsf 5.0.0 or later is not installed: the options above are stored but have no effect."
+      index_available: "available"
+      index_unavailable: "not available, so content search is skipped"
+      activation_note: "The DMSF agent also requires REDMINE_AI_HELPER_DMSF_ENABLED=1 and 'Send attachments to LLM' in the General tab."
 

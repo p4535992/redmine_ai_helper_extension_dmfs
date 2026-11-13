@@ -35,6 +35,7 @@ class DmsfToolsTest < Minitest::Test
 
   def teardown
     ENV["REDMINE_AI_HELPER_DMSF_ENABLED"] = @previous_opt_in
+    Setting.plugin_redmine_ai_helper_extension_dmfs = nil
   end
 
   def test_plugin_absence_blocks_search_and_analysis_before_storage_access
@@ -238,6 +239,60 @@ class DmsfToolsTest < Minitest::Test
     assert_empty result[:documents]
     assert_empty DmsfFile.search_calls
     assert_equal "unavailable", result[:content_search]
+  end
+
+  def test_full_text_search_is_enabled_by_default
+    assert RedmineAiHelperDmsf::Settings.full_text_search_enabled?
+    assert_equal({ "full_text_search_enabled" => "1" }, RedmineAiHelperDmsf::Settings.values)
+  end
+
+  def test_stored_settings_without_the_key_fall_back_to_the_default
+    Setting.plugin_redmine_ai_helper_extension_dmfs = {}
+
+    assert RedmineAiHelperDmsf::Settings.full_text_search_enabled?
+    assert_equal "1", RedmineAiHelperDmsf::Settings.values["full_text_search_enabled"]
+  end
+
+  def test_disabled_full_text_search_skips_dmsf_search_and_reports_disabled
+    RedmineDmsf.xapian_available = true
+    DmsfFile.search_result = [[@file], 1]
+    RedmineAiHelperDmsf::Settings.update("full_text_search_enabled" => "0")
+
+    result = @provider.search_files(query: "only-in-document-body")
+
+    assert_empty result[:documents]
+    assert_empty DmsfFile.search_calls
+    assert_equal "disabled", result[:content_search]
+    assert_equal false, result[:content_search_limited]
+    assert_no_document_read
+  end
+
+  def test_disabled_full_text_search_keeps_current_metadata_matches
+    RedmineAiHelperDmsf::Settings.update("full_text_search_enabled" => "0")
+
+    result = @provider.search_files(query: "technical")
+
+    assert_equal [42], ids(result)
+    assert_equal "current_metadata", result[:documents].first[:match_source]
+    assert_equal "disabled", result[:content_search]
+  end
+
+  def test_settings_update_ignores_unknown_keys_and_missing_values
+    RedmineAiHelperDmsf::Settings.update("full_text_search_enabled" => "1")
+    RedmineAiHelperDmsf::Settings.update("unknown_setting" => "0")
+    assert RedmineAiHelperDmsf::Settings.full_text_search_enabled?
+
+    RedmineAiHelperDmsf::Settings.update({})
+    assert RedmineAiHelperDmsf::Settings.full_text_search_enabled?
+    assert_equal({ "full_text_search_enabled" => "1" },
+                 Setting.plugin_redmine_ai_helper_extension_dmfs)
+  end
+
+  def test_settings_update_normalizes_unexpected_values_to_disabled
+    RedmineAiHelperDmsf::Settings.update("full_text_search_enabled" => "yes")
+
+    refute RedmineAiHelperDmsf::Settings.full_text_search_enabled?
+    assert_equal "0", RedmineAiHelperDmsf::Settings.values["full_text_search_enabled"]
   end
 
   def test_dmsf_files_count_pair_adds_content_matches_and_deduplicates

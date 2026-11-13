@@ -57,8 +57,32 @@ module RedmineAiHelperDmsfSmoke
     check("agent follows current activation settings", agent.enabled? == expected_enabled)
     puts "DMSF agent state: #{expected_enabled ? 'enabled' : 'disabled'}"
 
+    check_settings_page_integration
     check_backstories(agent)
     puts "Registration smoke checks passed; document access and model execution were not exercised."
+  end
+
+  # The extension settings are rendered inside AI Helper's own settings page.
+  # Verify registration, normalization and the rendered tab without saving.
+  def self.check_settings_page_integration
+    key = RedmineAiHelperDmsf::Settings::FULL_TEXT_SEARCH_KEY
+    values = RedmineAiHelperDmsf::Settings.values
+    check("full-text search setting is normalized", %w[0 1].include?(values[key]))
+    check("full-text search setting is read as a boolean",
+          RedmineAiHelperDmsf::Settings.full_text_search_enabled? == (values[key] == "1"))
+
+    plugin = Redmine::Plugin.find(:redmine_ai_helper_extension_dmfs)
+    check("plugin settings are declared", plugin.settings[:default].is_a?(Hash))
+    check("plugin has no separate settings screen", plugin.configurable? == false)
+    check("AI Helper settings helper is patched",
+          AiHelperSettingsHelper < RedmineAiHelperDmsf::Patches::AiHelperSettingsHelperPatch)
+    check("AI Helper settings controller is patched",
+          AiHelperSettingsController < RedmineAiHelperDmsf::Patches::AiHelperSettingsControllerPatch)
+
+    tabs = AiHelperSettingsController.new.view_context.ai_helper_settings_tabs(nil)
+    check("DMSF tab is appended to AI Helper settings", tabs.last[:name] == "dmsf")
+    partial = File.join(plugin.directory, "app/views/redmine_ai_helper_dmsf/_settings_tab.html.erb")
+    check("DMSF settings tab partial exists", File.file?(partial))
   end
 
   def self.check_backstories(agent)

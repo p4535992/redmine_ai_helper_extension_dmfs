@@ -1,0 +1,43 @@
+<%#
+  Tab of AI Helper's global settings form.
+  Redmine renders every tab of the form, so the hidden field always accompanies
+  the checkbox and keeps "off" explicit. A submission without the field leaves
+  the stored value unchanged; both cases are handled by
+  RedmineAiHelperDmsf::Settings.update.
+%>
+<% settings = RedmineAiHelperDmsf::Settings %>
+<% tools = RedmineAiHelperDmsf::DmsfTools %>
+<div class="box tabular">
+  <p>
+    <label for="redmine_ai_helper_dmsf_full_text_search_enabled">
+      <%= t("redmine_ai_helper_dmsf.settings.full_text_search") %>
+    </label>
+    <%= hidden_field_tag "redmine_ai_helper_dmsf[#{settings::FULL_TEXT_SEARCH_KEY}]",
+                         settings::DISABLED, id: nil %>
+    <%= check_box_tag "redmine_ai_helper_dmsf[#{settings::FULL_TEXT_SEARCH_KEY}]",
+                      settings::ENABLED,
+                      settings.full_text_search_enabled?,
+                      id: "redmine_ai_helper_dmsf_full_text_search_enabled" %>
+    <span class="description">
+      <%= t("redmine_ai_helper_dmsf.settings.full_text_search_description") %>
+    </span>
+  </p>
+  <p class="description">
+    <%= t("redmine_ai_helper_dmsf.settings.requires_dmsf") %>
+  </p>
+  <% if tools.available? %>
+    <p class="description">
+      <%= t("redmine_ai_helper_dmsf.settings.dmsf_available",
+            version: Redmine::Plugin.find(:redmine_dmsf).version,
+            index: tools.index_available? ? t("redmine_ai_helper_dmsf.settings.index_available") :
+                                            t("redmine_ai_helper_dmsf.settings.index_unavailable")) %>
+    </p>
+  <% else %>
+    <p class="warning">
+      <%= t("redmine_ai_helper_dmsf.settings.dmsf_missing") %>
+    </p>
+  <% end %>
+  <p class="description">
+    <%= t("redmine_ai_helper_dmsf.settings.activation_note") %>
+  </p>
+</div>

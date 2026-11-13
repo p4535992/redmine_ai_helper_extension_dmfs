@@ -98,6 +98,30 @@ versione compatibile di AI Helper senza quella integrazione incorporata. Il
 nuovo agente ha un nome distinto, ma mantenere attive entrambe le integrazioni
 farebbe comparire due agenti DMSF.
 
+## Impostazioni
+
+L'estensione non ha una pagina di configurazione propria: le sue opzioni sono
+una **scheda DMSF dentro Amministrazione → AI Helper**, salvate insieme al form
+delle impostazioni di AI Helper, così l'amministratore configura tutto in un
+punto solo.
+
+| Opzione | Default | Effetto |
+| --- | --- | --- |
+| Ricerca full-text nel contenuto dei documenti | attiva | `search_files` interroga anche l'indice Xapian di DMSF. Se disattivata, cerca solo nome del file, titolo e descrizione correnti e lo strumento riporta `content_search: "disabled"`. |
+
+La scheda indica se `redmine_dmsf` è rilevato e se il suo indice full-text
+risulta disponibile. **Queste opzioni funzionano solo con `redmine_dmsf`
+installato e abilitato sul progetto**: senza DMSF vengono salvate ma non hanno
+effetto e l'agente resta disabilitato. Servono inoltre
+`REDMINE_AI_HELPER_DMSF_ENABLED=1` e l'opzione **Send attachments to LLM** di AI
+Helper, entrambe ricordate nella stessa scheda.
+
+I valori sono un'impostazione di questo plugin
+(`Setting.plugin_redmine_ai_helper_extension_dmfs`): modello, tabelle,
+migrazioni e impostazioni di AI Helper non vengono modificati. Valori sconosciuti
+o modificati a mano vengono normalizzati a `0`/`1` e una richiesta che non
+contiene questo campo non altera il valore salvato.
+
 ## Esempi di utilizzo
 
 Nella normale chat AI Helper puoi chiedere:
@@ -138,8 +162,10 @@ restituiti e contenuto analizzato si riferiscono alla revisione attiva corrente.
 
 **Indice:** `content_search: attempted` significa che è stata invocata la ricerca
 DMSF, non che l'indice sia completo o funzionante. `unavailable` indica che
-Xapian non risulta configurato; `not_attempted` indica l'assenza di progetti
-autorizzati. Un risultato non troncato non garantisce una ricerca esaustiva.
+Xapian non risulta configurato; `disabled` indica che l'amministratore ha spento
+la ricerca full-text nella scheda DMSF delle impostazioni; `not_attempted` indica
+l'assenza di progetti autorizzati. Un risultato non troncato non garantisce una
+ricerca esaustiva.
 
 **MCP:** l'integrazione riguarda la chat AI Helper. Questa versione non aggiunge
 automaticamente gli strumenti DMSF all'endpoint MCP nativo di AI Helper.

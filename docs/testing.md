@@ -40,6 +40,12 @@ search caps, indexed-result reauthorization/deduplication, malformed search
 responses, surfaced integration failures, supported formats, UTF-8, size
 checks before and after download, and the two read-only tool declarations.
 
+They also cover the full-text search setting: the enabled default, fallback for
+stored settings without the key, `content_search: "disabled"` with no DMSF
+search call when the administrator turns it off, metadata matches that keep
+working, normalization of unexpected values, and submissions that must not
+reset the stored value.
+
 **Run the standalone suite in its own Ruby process.** Its fake top-level classes
 must not be loaded into a running Redmine environment. Do not add its files to
 a generic in-process Redmine test task.
@@ -72,6 +78,12 @@ the automatic agent registry entry, generated read-only tools, activation
 gates, and locale fallback. It avoids constructing an LLM provider and performs
 no document analysis or model calls. Application boot itself follows the host
 installation's normal initialization behavior.
+
+It also verifies the settings integration without saving anything: the plugin
+setting is declared, the plugin has no separate settings screen, AI Helper's
+settings helper and controller carry the extension patches, the DMSF tab is
+appended to AI Helper's tab list, the tab partial exists, and the stored value is
+normalized to `0`/`1`.
 
 ## Acceptance on the intended Redmine/DMSF version
 

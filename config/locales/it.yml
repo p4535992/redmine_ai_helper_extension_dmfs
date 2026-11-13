@@ -10,6 +10,7 @@ it:
       La ricerca nel contenuto dei documenti dipende dalla disponibilità e utilizzabilità dell'indice full-text di DMSF.
       Descrivi la copertura della ricerca nel contenuto soltanto come indicata dallo strumento; non presentare risultati basati solo sui metadati come ricerche all'interno dei documenti.
       content_search=attempted significa che è stata invocata la ricerca DMSF, non che l'indice sia funzionante o completo. L'assenza di troncamento non garantisce una ricerca esaustiva.
+      content_search=disabled significa che l'amministratore ha disattivato la ricerca full-text: sono stati cercati solo nome del file, titolo e descrizione correnti. In quel caso non affermare che il contenuto dei documenti è stato cercato.
       Un risultato con match_source=dmsf_search può riferirsi a una revisione precedente. Usa analyze_file per verificare le affermazioni sulla revisione corrente; un risultato dell'indice non ne dimostra il contenuto attuale.
       I risultati sono limitati. Se lo strumento segnala un troncamento, spiega che i risultati sono incompleti e suggerisci una ricerca o un progetto più specifici.
       Usa analyze_file solo per un ID documento restituito da search_files o fornito esplicitamente dall'utente.
@@ -19,4 +20,14 @@ it:
       Se l'accesso è negato, non dedurre né rivelare l'esistenza o i contenuti di documenti riservati.
       Non rivelare percorsi di archiviazione interni e non dichiarare di aver analizzato un documento quando lo strumento ha fallito.
       Questi strumenti sono di sola lettura: non devono creare, aggiornare, spostare, approvare o eliminare file.
+    settings:
+      tab_label: "DMSF"
+      full_text_search: "Ricerca full-text nel contenuto dei documenti"
+      full_text_search_description: "Interroga anche l'indice Xapian di DMSF. Se disattivata, vengono cercati solo nome del file, titolo e descrizione correnti."
+      requires_dmsf: "Queste opzioni funzionano solo con il plugin redmine_dmsf installato e abilitato sul progetto; senza DMSF vengono salvate ma non hanno effetto."
+      dmsf_available: "redmine_dmsf %{version} rilevato; indice full-text %{index}."
+      dmsf_missing: "redmine_dmsf 5.0.0 o successivo non è installato: le opzioni sopra vengono salvate ma non hanno effetto."
+      index_available: "disponibile"
+      index_unavailable: "non disponibile, quindi la ricerca nel contenuto viene saltata"
+      activation_note: "L'agente DMSF richiede anche REDMINE_AI_HELPER_DMSF_ENABLED=1 e l'opzione «Send attachments to LLM» nella scheda Generale."
 

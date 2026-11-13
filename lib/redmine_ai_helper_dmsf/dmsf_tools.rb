@@ -9,6 +9,7 @@ require "rubygems/version"
 require "set"
 require "stringio"
 require "redmine_ai_helper/tools/file_tools"
+require_relative "settings"
 
 module RedmineAiHelperDmsf
   # Read-only DMSF tools, registered only with this extension's chat agent.
@@ -36,11 +37,20 @@ module RedmineAiHelperDmsf
       available? && ENV["REDMINE_AI_HELPER_DMSF_ENABLED"] == "1" && AiHelperSetting.attachment_send_enabled?
     end
 
+    # DMSF reports its own Xapian configuration; this says nothing about index
+    # health or completeness.
+    # @return [Boolean] whether DMSF reports a usable full-text index
+    def self.index_available?
+      !!(defined?(::RedmineDmsf) && ::RedmineDmsf.respond_to?(:xapian_available) &&
+        ::RedmineDmsf.xapian_available)
+    end
+
     define_function :search_files, write: false,
       description: "Search permitted DMSF documents by current filename, title or description. " \
-                   "If Xapian is configured, DMSF search candidates are included; these may " \
-                   "match earlier revisions. Returns current metadata and DMSF links, never " \
-                   "file contents or index snippets. Results and scans are bounded." do
+                   "If the administrator enabled full-text search and DMSF has a usable index, " \
+                   "DMSF search candidates are included too; these may match earlier revisions. " \
+                   "Returns current metadata and DMSF links, never file contents or index " \
+                   "snippets. Results and scans are bounded." do
       property :query, type: "string", description: "Required search text (up to 200 characters)", required: true
       property :project_id, type: "integer", description: "Optional Redmine project ID", required: false
       property :limit, type: "integer", description: "Maximum matches (1 to 20; default 10)", required: false
@@ -85,7 +95,7 @@ module RedmineAiHelperDmsf
           documents << document_metadata(file).merge(match_source: "current_metadata")
         end
 
-        content_search = content_search_available? ? "attempted" : "unavailable"
+        content_search = content_search_status
         content_search_limited = false
         if content_search == "attempted"
           candidates, content_search_limited = content_search_files(query.strip, projects)
@@ -195,11 +205,14 @@ module RedmineAiHelperDmsf
         .includes(:project, :dmsf_folder, :dmsf_file_revisions)
     end
 
-    # This flag reports configuration, not index health or complete revision coverage.
-    # @return [Boolean] whether to attempt DMSF's optional indexed search
-    def content_search_available?
-      !!(defined?(::RedmineDmsf) && ::RedmineDmsf.respond_to?(:xapian_available) &&
-        ::RedmineDmsf.xapian_available)
+    # This flag reports configuration, not index health or complete revision
+    # coverage. The administrator setting is checked first so a disabled
+    # integration never calls DMSF search, even when an index exists.
+    # @return [String] "disabled", "unavailable" or "attempted"
+    def content_search_status
+      return "disabled" unless Settings.full_text_search_enabled?
+
+      self.class.index_available? ? "attempted" : "unavailable"
     end
 
     # DMSF 5.x returns [records, count]; count describes returned candidates, not

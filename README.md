@@ -20,7 +20,8 @@ preserved for adapted AI Helper code.
 ## What this plugin does
 
 - Finds permitted DMSF documents by current filename, title and description.
-- Optionally includes candidates from DMSF's existing Xapian search.
+- Optionally includes candidates from DMSF's existing Xapian search, which the
+  administrator can turn off from AI Helper's settings page.
 - Analyzes the latest permitted PDF or UTF-8 text/code revision with the AI
   model already configured in AI Helper.
 - Returns a normal DMSF document URL, current version and revision ID.
@@ -87,6 +88,29 @@ AI Helper before this extension.
 This plugin has no additional gems or database migrations. Its dependencies
 still require their normal installation and migration steps.
 
+## Settings
+
+This extension has no separate configuration screen. Its options are a **DMSF
+tab inside Administration → AI Helper**, saved with AI Helper's own settings
+form, so the operator configures everything in one place.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| Full-text search in document contents | enabled | `search_files` also queries DMSF's Xapian index. When disabled, only the current filename, title and description are searched and the tool reports `content_search: "disabled"`. |
+
+The tab states whether `redmine_dmsf` is detected and whether its full-text
+index is reported as available. **These options only work when `redmine_dmsf`
+is installed and enabled on the project**: without DMSF they are stored but have
+no effect, and the agent stays disabled. The agent also needs
+`REDMINE_AI_HELPER_DMSF_ENABLED=1` and AI Helper's **Send attachments to LLM**
+option, both shown as reminders in the same tab.
+
+The values are stored as this plugin's own Redmine plugin setting
+(`Setting.plugin_redmine_ai_helper_extension_dmfs`). AI Helper's model, tables,
+migrations and settings are not modified. Unknown or hand-edited values are
+normalized to `0`/`1`, and a submission that does not carry this field leaves
+the stored value unchanged.
+
 If you previously installed the experimental AI Helper branch with built-in
 DMSF tools, use an upstream-compatible AI Helper installation when moving to
 this extension. The new agent has a distinct name to avoid overwriting the old
@@ -140,7 +164,7 @@ Search responses include:
 | --- | --- |
 | `scanned` | Candidate rows examined in the extension's metadata stage |
 | `truncated` | An extension scan/result/candidate bound was encountered |
-| `content_search` | `unavailable`, `attempted`, or `not_attempted` when no projects are authorized |
+| `content_search` | `unavailable`, `attempted`, `disabled` when the administrator turned full-text search off, or `not_attempted` when no projects are authorized |
 | `content_search_limited` | The returned DMSF candidate batch reached its bound or reported more candidates |
 | Per-document `match_source` | `current_metadata` or `dmsf_search` |
 
@@ -164,6 +188,11 @@ to verify a statement against the current document.
   model and project access rules while declaring only two read-only tools.
 - The agent's prompts live in this plugin's English, Italian and Japanese
   locales, with English fallback. They do not depend on an added upstream prompt.
+- `lib/redmine_ai_helper_dmsf/patches/` appends the DMSF tab to AI Helper's
+  settings page and persists this plugin's own setting. AI Helper's views, model
+  and tables are not replaced or copied; the patch is applied idempotently from
+  `to_prepare` and `after_initialize`, because Redmine 7 production eager-loads
+  plugin code without running a plugin-registered `to_prepare`.
 - DMSF availability is checked at request time because its initializer runs
   after this plugin. No DMSF model is manually loaded or patched during startup.
 
@@ -180,6 +209,8 @@ either dependency.
 Remove `REDMINE_AI_HELPER_DMSF_ENABLED=1` from the service configuration, or turn
 off AI Helper's attachment-sharing setting, and restart the affected processes
 when changing their environment. Disabling either gate prevents new tool calls.
+Turning off full-text search in the DMSF tab does not disable the agent: it only
+restricts searches to current metadata.
 To uninstall, remove this plugin's directory from the Redmine installation and
 restart Redmine. No extension database rollback is required.
 

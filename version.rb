@@ -4,6 +4,6 @@
 
 module RedmineAiHelperDmsf
   # Version of this independently distributed Redmine plugin.
-  VERSION = "0.1.0"
+  VERSION = "0.2.0"
 end
 

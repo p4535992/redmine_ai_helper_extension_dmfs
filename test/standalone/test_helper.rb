@@ -40,6 +40,11 @@ class AiHelperSetting
 end
 
 module Setting
+  class << self
+    # Serialized plugin setting written by RedmineAiHelperDmsf::Settings.
+    attr_accessor :plugin_redmine_ai_helper_extension_dmfs
+  end
+
   def self.host_name
     "redmine.example"
   end

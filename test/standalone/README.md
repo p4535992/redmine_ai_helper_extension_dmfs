@@ -18,6 +18,11 @@ only two read-only tools are declared. The test DMSF file intentionally does not
 provide `visible?` or `view_url`, because these APIs are absent in supported older
 DMSF 5.x versions.
 
+The full-text search setting is covered too: enabled default, fallback when the
+stored hash has no key, `content_search: "disabled"` without a DMSF search call,
+metadata-only results that keep working, and normalization of unexpected or
+missing submissions.
+
 These are contract/behavior tests, not an end-to-end Redmine installation test.
 They do not verify Rails autoloading, actual database scopes, DMSF permission
 inheritance, Xapian index health, or requests to a configured AI model. Use the

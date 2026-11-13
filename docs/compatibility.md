@@ -64,6 +64,25 @@ Only this provider's two declared functions are exposed through this agent.
 The extension does not register a new MCP endpoint or modify AI Helper's MCP
 provider list.
 
+### AI Helper settings page
+
+The administrator options are rendered inside AI Helper's global settings page
+instead of a separate screen. The integration relies on these host contracts,
+which are re-checked by the Redmine smoke check:
+
+| Interface | Use in this extension |
+| --- | --- |
+| `AiHelperSettingsHelper#ai_helper_settings_tabs` | Prepended to append the `dmsf` tab after AI Helper's own tabs; the tab list is returned unchanged if the host method changes shape. |
+| `AiHelperSettingsController#update` | Prepended to persist this plugin's setting after AI Helper reported success (it redirects on success and re-renders the form on failure). |
+| `render_tabs` + plugin `app/views` | The tab partial lives in this plugin, which Redmine adds to the controller's view path. |
+| `Redmine::Plugin#settings` | Declares `full_text_search_enabled` as this plugin's own serialized setting; no `:partial` is declared, so no separate settings screen is advertised. |
+
+The patches are applied from `to_prepare` and `after_initialize` because
+Redmine 7 production eager-loads plugin code and does not run a plugin-registered
+`to_prepare`. Both calls are idempotent, and AI Helper's model, tables,
+migrations and settings are never modified. If a future AI Helper release renames
+these methods, the smoke check fails instead of silently dropping the tab.
+
 ## DMSF interfaces and authorization
 
 The extension deliberately avoids `DmsfFile#visible?` and `DmsfFile#view_url`:
