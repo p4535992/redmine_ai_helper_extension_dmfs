@@ -124,6 +124,47 @@ Source references:
 [`routes` 5.0.0](https://github.com/picman/redmine_dmsf/blob/bbd3cc953c3791d61e8560c41689975691611f09/config/routes.rb),
 [`routes` 5.2.0](https://github.com/picman/redmine_dmsf/blob/fceb0b694a59ff98f044b39c45d7b218bb836268/config/routes.rb).
 
+### Folder scope
+
+`folder_id` is resolved with `DmsfFolder.find_by`, then checked against the
+authorized project set, `DmsfFolder.visible.exists?(id:)` and
+`DmsfFolder.permissions?(folder, allow_system: true, file: false)`. The folder
+gate therefore requires `view_dmsf_folders`, which is DMSF's own condition for
+displaying a folder; files inside it are still checked with the `file: true`
+gate. A folder of an unauthorized project, a deleted folder or a denied folder
+is rejected with the same generic error.
+
+`folder_path` is resolved from the project root one segment at a time, reading
+only the visible children of the current folder and comparing titles
+case-insensitively. The walk is limited to 20 segments, so a malformed path
+cannot trigger unbounded queries. `folder_id` and `folder_path` are mutually
+exclusive.
+
+`include_subfolders` walks `dmsf_folders` breadth-first through the visible
+children, de-duplicating IDs and stopping at 500 folders; the response reports
+`folders_truncated` when it stops early. DMSF has no single recursive scope for
+this, and `DmsfFolder.directory_subtree` builds a display tree rather than an ID
+set, so the bounded walk lives in this extension.
+
+### DMSF page action
+
+DMSF exposes no view hook on its document page (`dmsf_files/show.html.erb`
+renders only `_main`) or on its folder page, and its row context menu is built by
+a helper without `call_hook`. The extension therefore does not patch DMSF views.
+It registers `view_layouts_base_body_bottom`, decides server-side whether the
+action applies (controller `dmsf_files`/`dmsf`, action `show`, the rendered
+`@dmsf_file`/`@folder`, the activation gates, DMSF permissions and an available
+AI Helper chat), and emits a small script that appends the action to the page's
+first `#content > .contextual` element.
+
+The script only fills the AI Helper chat input and opens the popup; it never
+submits. It depends on AI Helper's public chat surface: the
+`#ai-helper-message-input` textarea, `ai_helper.page_info` with
+`controller_name`/`action_name`/`content_id`, and `AiHelperChatPopup.open()`.
+Those names must be re-checked when AI Helper changes its chat assets; the
+standalone suite cannot detect such a change, so the Redmine acceptance step
+covers it.
+
 ## Search coverage and limits
 
 The metadata pass examines at most 2,000 active file records in permitted
@@ -191,5 +232,8 @@ download-access records or send its download notification emails.
   search and analysis in a real staging database.
 - Test the deployed storage backend, configured host/protocol, attachment size
   settings and Xapian behavior with indexed historical revisions.
+- Re-check the DMSF page action against the installed DMSF and AI Helper: DMSF
+  may add a real view hook, and AI Helper may rename the chat input, the
+  `page_info` keys or the popup API used by the inserted script.
 - Re-run the extension's regression suite and report source review, standalone
   test execution and full Redmine integration results separately.

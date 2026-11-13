@@ -31,10 +31,30 @@ end
 
 class AiHelperSetting
   class << self
-    attr_accessor :send_enabled, :attachment_max_size_mb
+    attr_accessor :send_enabled, :attachment_max_size_mb, :profile
 
     def attachment_send_enabled?
       send_enabled
+    end
+
+    # The chat sidebar needs a model profile; the page action mirrors that check.
+    def find_or_create
+      OpenStruct.new(model_profile: profile)
+    end
+  end
+end
+
+module RedmineAiHelper
+  module Util
+    # Test double for the single access decision shared by AI Helper's tools.
+    module PermissionChecker
+      class << self
+        attr_accessor :module_enabled
+
+        def module_enabled?(project:, permission: nil)
+          module_enabled ? !project.nil? : false
+        end
+      end
     end
   end
 end
@@ -108,13 +128,77 @@ class Project
 end
 
 class DmsfFolder
+  # Minimal relation double: only the chains used by the folder filter.
+  class Scope
+    include Enumerable
+
+    def initialize(records)
+      @records = records
+    end
+
+    def where(project_id: nil, dmsf_folder_id: :any)
+      records = @records
+      records = records.select { |folder| folder.project_id == project_id } unless project_id.nil?
+      unless dmsf_folder_id == :any
+        records = records.select { |folder| folder.dmsf_folder_id == dmsf_folder_id }
+      end
+      self.class.new(records)
+    end
+
+    def each(&block)
+      @records.each(&block)
+    end
+
+    def exists?(id:)
+      @records.any? { |folder| folder.id == id }
+    end
+
+    def find_by(id:)
+      @records.find { |folder| folder.id == id }
+    end
+  end
+
   class << self
-    attr_accessor :denied, :permission_calls
+    attr_accessor :records, :denied, :permission_calls
+
+    def visible
+      Scope.new(records.reject(&:deleted?))
+    end
+
+    def find_by(id:)
+      records.find { |folder| folder.id == id }
+    end
 
     def permissions?(folder, allow_system:, file:)
       permission_calls << { folder: folder, allow_system: allow_system, file: file }
       !denied.include?(folder)
     end
+  end
+
+  attr_accessor :id, :project, :title, :dmsf_folder, :deleted
+
+  def initialize(id, project:, title:, dmsf_folder: nil)
+    @id = id
+    @project = project
+    @title = title
+    @dmsf_folder = dmsf_folder
+    @deleted = false
+  end
+
+  def project_id
+    project.id
+  end
+
+  def dmsf_folder_id
+    dmsf_folder&.id
+  end
+
+  def deleted?
+    deleted
+  end
+
+  def dmsf_path_str
+    dmsf_folder ? "#{dmsf_folder.dmsf_path_str}/#{title}" : title
   end
 end
 
@@ -150,8 +234,11 @@ class DmsfFile
       @records = records
     end
 
-    def where(project_id:)
-      self.class.new(@records.select { |file| project_id.include?(file.project_id) })
+    def where(project_id: nil, dmsf_folder_id: nil)
+      records = @records
+      records = records.select { |file| project_id.include?(file.project_id) } if project_id
+      records = records.select { |file| dmsf_folder_id.include?(file.dmsf_folder_id) } if dmsf_folder_id
+      self.class.new(records)
     end
 
     def includes(*)
@@ -166,6 +253,10 @@ class DmsfFile
 
     def find_by(id:)
       @records.find { |file| file.id == id }
+    end
+
+    def count
+      @records.length
     end
   end
 
@@ -186,7 +277,7 @@ class DmsfFile
   end
 
   attr_accessor :id, :project, :name, :title, :description, :revision, :folder,
-                :deleted
+                :deleted, :dmsf_folder_id, :updated_at
 
   def initialize(id, project:, revision:, name: "spec.pdf")
     @id = id
@@ -197,6 +288,8 @@ class DmsfFile
     @description = "Project reference"
     @folder = Object.new
     @deleted = false
+    @dmsf_folder_id = nil
+    @updated_at = Time.at(0)
   end
 
   def project_id

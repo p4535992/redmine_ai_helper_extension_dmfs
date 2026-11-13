@@ -1,0 +1,70 @@
+<%#
+  Action offered on DMSF document and folder pages.
+  DMSF has no view hook on those pages, so the action is inserted next to the
+  page's own actions by the script below. The server decides whether the action
+  is offered at all; the script only fills the AI Helper chat input and opens it,
+  and never submits on its own.
+%>
+<% target = RedmineAiHelperDmsf::DocumentAction.target(controller) %>
+<% if target %>
+  <%
+    label = t("redmine_ai_helper_dmsf.document_action.label")
+    prompt = if target[:kind] == "document"
+               t("redmine_ai_helper_dmsf.document_action.document_prompt",
+                 title: target[:title], id: target[:id])
+             else
+               t("redmine_ai_helper_dmsf.document_action.folder_prompt",
+                 path: target[:path], id: target[:id])
+             end
+  %>
+  <script>
+    (function () {
+      var label = <%= raw json_escape(label.to_json) %>;
+      var prompt = <%= raw json_escape(prompt.to_json) %>;
+      var contentId = <%= raw json_escape(target[:id].to_json) %>;
+
+      function insert() {
+        if (document.getElementById('aihelper-dmsf-action')) {
+          return;
+        }
+        var contextual = document.querySelector('#content > .contextual') ||
+                         document.querySelector('#content .contextual');
+        if (!contextual) {
+          return;
+        }
+        var link = document.createElement('a');
+        link.href = '#';
+        link.id = 'aihelper-dmsf-action';
+        link.className = 'aihelper-dmsf-action';
+        link.textContent = label;
+        link.addEventListener('click', function (event) {
+          event.preventDefault();
+          var input = document.getElementById('ai-helper-message-input');
+          if (!input) {
+            return;
+          }
+          if (window.ai_helper && window.ai_helper.page_info) {
+            window.ai_helper.page_info['controller_name'] = 'dmsf_files';
+            window.ai_helper.page_info['action_name'] = 'show';
+            window.ai_helper.page_info['content_id'] = contentId;
+          }
+          input.value = prompt;
+          if (window.AiHelperChatPopup && typeof window.AiHelperChatPopup.open === 'function') {
+            window.AiHelperChatPopup.open();
+          }
+          input.focus();
+          if (input.scrollIntoView) {
+            input.scrollIntoView({ block: 'center' });
+          }
+        });
+        contextual.appendChild(link);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', insert);
+      } else {
+        insert();
+      }
+    })();
+  </script>
+<% end %>

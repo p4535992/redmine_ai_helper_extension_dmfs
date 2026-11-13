@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0 — 2026-11-13
+
+- Restrict `search_files` to one DMSF folder with `folder_id` or `folder_path`
+  and optional nested folders. The folder must pass DMSF's visibility and
+  folder-permission checks, and the response reports the folder scope and its
+  document count so an incomplete scan is explicit.
+- Add the read-only `summarize_folder` tool: it sends at most five supported
+  documents, newest first, within AI Helper's attachment size limit, and reports
+  what it skipped instead of analyzing a whole large folder.
+- Add an **Ask AI Helper** action to DMSF document and folder pages. It fills the
+  chat input with a question about that document or folder and opens the chat
+  without submitting. DMSF exposes no view hook on those pages, so the action is
+  inserted by a server-gated script from the layout hook; DMSF views are neither
+  copied nor patched.
+- Extend the standalone suite with folder scope, folder path, content-search
+  filtering, folder summary and page-action coverage, and the Redmine smoke check
+  with hook, partial, locale and visibility assertions.
+
 ## 0.2.0 — 2026-11-13
 
 - Add an administrator setting for DMSF full-text search. It is rendered as a

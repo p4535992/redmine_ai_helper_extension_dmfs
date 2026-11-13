@@ -3,6 +3,8 @@
 # Copyright (C) 2026 p4535992 and contributors.
 
 require_relative "redmine_ai_helper_dmsf/settings"
+require_relative "redmine_ai_helper_dmsf/document_action"
+require_relative "redmine_ai_helper_dmsf/view_hook"
 require_relative "redmine_ai_helper_dmsf/patches/ai_helper_settings_helper_patch"
 require_relative "redmine_ai_helper_dmsf/patches/ai_helper_settings_controller_patch"
 

@@ -30,6 +30,12 @@ manutenzione delle chiamate alle API di DMSF rimane in questo repository.
 
 - Ricerca per nome file, titolo e descrizione della revisione corrente.
 - Inclusione facoltativa dei candidati trovati dalla ricerca Xapian di DMSF.
+- Ricerca limitata a una singola cartella DMSF, per ID o per percorso, con
+  eventuale inclusione delle sottocartelle.
+- Riassunto di una cartella con un numero limitato di documenti e indicazione di
+  quelli saltati, senza inviare al modello una cartella grande per intero.
+- Azione **Chiedi a AI Helper** nelle pagine documento e cartella di DMSF, che
+  apre la chat con la domanda già compilata.
 - Analisi della revisione corrente di PDF e file di testo/codice UTF-8 tramite
   il modello già configurato in AI Helper.
 - Risposte con URL originale DMSF, versione e ID della revisione.
@@ -130,9 +136,35 @@ Nella normale chat AI Helper puoi chiedere:
 - «Riassumi il documento DMSF 42 e indica il collegamento originale e la versione».
 - «La revisione corrente del documento DMSF 42 descrive i tempi di conservazione?».
 
-Gli strumenti disponibili sono `search_files(query:, project_id: nil, limit: 10)`
-e `analyze_file(file_id:, question: nil)`. La ricerca accetta fino a 200
-caratteri; la domanda per l'analisi fino a 2.000.
+Gli strumenti disponibili sono:
+
+- `search_files(query:, project_id: nil, folder_id: nil, folder_path: nil,
+  include_subfolders: false, limit: 10)`: la ricerca accetta fino a 200
+  caratteri; `folder_id` e `folder_path` sono alternativi.
+- `analyze_file(file_id:, question: nil)`: la domanda può arrivare a 2.000
+  caratteri.
+- `summarize_folder(folder_id: nil, folder_path: nil, project_id: nil,
+  include_subfolders: false, max_documents: 3, question: nil)`: invia al massimo
+  cinque documenti supportati, dal più recente, entro il limite di dimensione
+  degli allegati di AI Helper.
+
+Esempi con la cartella:
+
+- «Cerca solo nella cartella DMSF `Contratti/2026` le clausole di conservazione».
+- «Riassumi i documenti della cartella DMSF 118, al massimo due».
+
+## Azione nelle pagine DMSF
+
+Le pagine documento e cartella di DMSF mostrano l'azione **Chiedi a AI Helper**
+accanto alle azioni della pagina. Compila il campo della chat con una domanda sul
+documento o sulla cartella e apre la chat; non invia il messaggio, così puoi
+modificare la domanda prima di premere Invia.
+
+L'azione è decisa lato server e compare solo se l'integrazione è attiva, se puoi
+vedere il documento o la cartella e se la chat di AI Helper è disponibile per il
+progetto (modulo abilitato e profilo del modello configurato). DMSF non espone
+hook di vista su quelle pagine, quindi l'azione viene inserita da uno script
+generato dall'hook di layout: le viste di DMSF non vengono copiate né modificate.
 
 L'agente rimane disabilitato quando manca DMSF, la sua API non è supportata o
 uno dei due consensi amministrativi è spento. Anche le chiamate dirette agli
@@ -153,6 +185,19 @@ interni, chiavi di archiviazione o URL firmati dei blob.
 candidati e restituisce al massimo 20 risultati autorizzati. La ricerca DMSF
 facoltativa ha un limite separato di 2.000 candidati; Xapian ha ulteriori limiti
 interni. `truncated: true` indica un limite incontrato dall'estensione.
+
+Il filtro per cartella restringe la scansione ma non elimina il limite: una
+cartella con più di 2.000 documenti può essere esaminata solo in parte. La
+risposta riporta `folder.document_count` e `truncated`, così l'agente può dire che
+il risultato è incompleto e proporre una cartella o una ricerca più specifica.
+`include_subfolders` percorre al massimo 500 cartelle e segnala
+`folders_truncated` quando si ferma.
+
+**Riassunto di cartella:** `summarize_folder` non invia mai una cartella intera.
+Sceglie al massimo `max_documents` (da 1 a 5) documenti supportati, dal più
+recente, mantiene il totale entro il limite di dimensione degli allegati e riporta
+`skipped.unsupported_or_too_large`, `skipped.not_selected` e
+`skipped.scan_truncated`.
 
 **Revisioni:** la ricerca nell'indice può trovare corrispondenze nelle revisioni
 precedenti. Il campo `match_source` distingue `current_metadata` da

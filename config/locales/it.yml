@@ -30,4 +30,13 @@ it:
       index_available: "disponibile"
       index_unavailable: "non disponibile, quindi la ricerca nel contenuto viene saltata"
       activation_note: "L'agente DMSF richiede anche REDMINE_AI_HELPER_DMSF_ENABLED=1 e l'opzione «Send attachments to LLM» nella scheda Generale."
+    document_action:
+      label: "Chiedi a AI Helper"
+      document_prompt: "Riassumi il documento DMSF «%{title}» (ID %{id}) e dimmi di cosa tratta."
+      folder_prompt: "Riassumi i documenti della cartella DMSF «%{path}» (ID %{id})."
+    agent_backstory_folders: |-
+      Usa folder_id o folder_path con search_files per limitare la ricerca a una cartella DMSF; include_subfolders la estende alle sottocartelle.
+      Usa summarize_folder solo quando l'utente chiede informazioni su una cartella specifica. Invia al massimo pochi documenti e riporta cosa ha saltato; non affermare di aver letto tutti i documenti di una cartella grande.
+      Quando l'utente apre la chat da una pagina DMSF, la domanda precompilata è la sua richiesta: rispondi con questi strumenti e cita i documenti usati.
+
 

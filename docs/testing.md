@@ -23,6 +23,7 @@ From this plugin's directory, with Ruby 3.2+ and Minitest available:
 
 ```bash
 ruby -Itest/standalone test/standalone/dmsf_tools_test.rb
+ruby -Itest/standalone test/standalone/document_action_test.rb
 ```
 
 The suite loads the production `DmsfTools` implementation with isolated fakes
@@ -38,7 +39,13 @@ The tests exercise dependency and double-opt-in gates, permissions before
 attachment access, folder ACLs, current revision filtering, strict IDs,
 search caps, indexed-result reauthorization/deduplication, malformed search
 responses, surfaced integration failures, supported formats, UTF-8, size
-checks before and after download, and the two read-only tool declarations.
+checks before and after download, and the three read-only tool declarations.
+
+They also cover the folder features: `folder_id` and `folder_path` resolution,
+nested-folder scope, rejection of unknown, denied, ambiguous or foreign folders,
+content-search candidates outside the selected folder, the folder summary
+selection and size budget, and the server-side decision behind the DMSF page
+action (including the disabled integration and an unavailable chat).
 
 They also cover the full-text search setting: the enabled default, fallback for
 stored settings without the key, `content_search: "disabled"` with no DMSF
@@ -85,6 +92,12 @@ settings helper and controller carry the extension patches, the DMSF tab is
 appended to AI Helper's tab list, the tab partial exists, and the stored value is
 normalized to `0`/`1`.
 
+The page action is checked without rendering a DMSF page: the layout hook is
+registered, the action partial exists, the label is translated in every bundled
+locale, the action is not offered outside DMSF, and a document without project
+access is refused. The positive path needs real DMSF data and is covered by the
+laboratory smoke check.
+
 ## Acceptance on the intended Redmine/DMSF version
 
 With a test project and non-sensitive sample documents:
@@ -104,6 +117,14 @@ With a test project and non-sensitive sample documents:
    about the current revision. Confirm the returned `match_source`.
 8. Check project boundaries, deleted files, hidden system/issue folders and
    AI Helper's all-project setting with accounts that have different roles.
+9. Search inside a folder by ID and by path, with and without nested folders;
+   confirm `folder.document_count` and `truncated` on a large folder.
+10. Ask for a folder summary and confirm the analyzed documents, the skipped
+    counts and the size budget; verify that no whole folder is transmitted.
+11. Open a DMSF document and a folder page: the **Ask AI Helper** action must
+    appear, fill the question and open the chat without sending it. Confirm it is
+    absent with either opt-in off, without a model profile, and for a document or
+    folder the account cannot see.
 
 These steps cover behavior that dependency fakes cannot establish: Rails load
 order, the real database scopes/ACL inheritance, Active Storage backends, URL

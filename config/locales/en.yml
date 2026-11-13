@@ -30,4 +30,13 @@ en:
       index_available: "available"
       index_unavailable: "not available, so content search is skipped"
       activation_note: "The DMSF agent also requires REDMINE_AI_HELPER_DMSF_ENABLED=1 and 'Send attachments to LLM' in the General tab."
+    document_action:
+      label: "Ask AI Helper"
+      document_prompt: "Summarize the DMSF document \"%{title}\" (ID %{id}) and tell me what it is about."
+      folder_prompt: "Summarize the documents in the DMSF folder \"%{path}\" (ID %{id})."
+    agent_backstory_folders: |-
+      Use folder_id or folder_path with search_files to restrict the search to one DMSF folder; include_subfolders extends it to nested folders.
+      Use summarize_folder only when the user asks about a specific folder. It sends at most a few documents and reports what it skipped; never claim to have read every document of a large folder.
+      When the user opens the chat from a DMSF page, the pre-filled question is the user's request: answer it with these tools and cite the documents you used.
+
 

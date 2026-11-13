@@ -20,6 +20,10 @@ class DmsfToolsTest < Minitest::Test
     Project.records = [@project, @other_project]
     @provider = RedmineAiHelperDmsf::DmsfTools.new
     @provider.allowed_projects = [@project]
+    RedmineAiHelper::Tools.default_allowed_projects = [@project]
+    RedmineAiHelper::Util::PermissionChecker.module_enabled = true
+    AiHelperSetting.profile = Object.new
+    DmsfFolder.records = []
     DmsfFolder.denied = []
     DmsfFolder.permission_calls = []
     DmsfFile.records = []
@@ -36,6 +40,7 @@ class DmsfToolsTest < Minitest::Test
   def teardown
     ENV["REDMINE_AI_HELPER_DMSF_ENABLED"] = @previous_opt_in
     Setting.plugin_redmine_ai_helper_extension_dmfs = nil
+    RedmineAiHelper::Tools.default_allowed_projects = nil
   end
 
   def test_plugin_absence_blocks_search_and_analysis_before_storage_access
@@ -82,9 +87,9 @@ class DmsfToolsTest < Minitest::Test
     Object.const_set(:DmsfFileRevision, original) if original
   end
 
-  def test_only_two_read_only_functions_are_exposed
+  def test_only_three_read_only_functions_are_exposed
     registry = RedmineAiHelperDmsf::DmsfTools.function_registry
-    assert_equal [:analyze_file, :search_files], registry.keys.sort
+    assert_equal [:analyze_file, :search_files, :summarize_folder], registry.keys.sort
     assert registry.values.all? { |function| function[:write] == false }
   end
 
@@ -448,7 +453,192 @@ class DmsfToolsTest < Minitest::Test
     assert_no_document_read
   end
 
+  def test_folder_filter_restricts_metadata_search_to_one_folder
+    folder = add_folder(10, "Contracts")
+    other = add_folder(11, "Archive")
+    @file.dmsf_folder_id = folder.id
+    matching_file(43, folder: other)
+
+    result = @provider.search_files(query: "technical", folder_id: 10)
+
+    assert_equal [42], ids(result)
+    assert_equal 10, result[:folder][:id]
+    assert_equal "Contracts", result[:folder][:path]
+    assert_equal 1, result[:folder][:document_count]
+    assert_equal false, result[:folder][:include_subfolders]
+    assert_equal false, result[:folder][:folders_truncated]
+  end
+
+  def test_include_subfolders_widens_the_folder_scope
+    parent = add_folder(10, "Contracts")
+    child = add_folder(11, "2026", parent: parent)
+    @file.dmsf_folder_id = parent.id
+    matching_file(43, folder: child)
+
+    without = @provider.search_files(query: "technical", folder_id: 10)
+    with = @provider.search_files(query: "technical", folder_id: 10, include_subfolders: true)
+
+    assert_equal [42], ids(without)
+    assert_equal [42, 43], ids(with)
+    assert_equal 2, with[:folder][:document_count]
+    assert_equal true, with[:folder][:include_subfolders]
+  end
+
+  def test_folder_path_is_resolved_case_insensitively
+    parent = add_folder(10, "Contracts")
+    child = add_folder(11, "2026", parent: parent)
+    @file.dmsf_folder_id = child.id
+
+    result = @provider.search_files(query: "technical", folder_path: " contracts / 2026 ")
+
+    assert_equal [42], ids(result)
+    assert_equal 11, result[:folder][:id]
+    assert_equal "Contracts/2026", result[:folder][:path]
+  end
+
+  def test_unknown_denied_or_ambiguous_folder_filters_are_rejected
+    folder = add_folder(10, "Contracts")
+
+    assert_error(@provider.search_files(query: "technical", folder_id: 999), /not accessible/)
+    assert_error(@provider.search_files(query: "technical", folder_path: "Missing"), /not accessible/)
+    assert_error(@provider.search_files(query: "technical", folder_id: 10, folder_path: "Contracts"),
+                 /mutually exclusive/)
+    assert_error(@provider.search_files(query: "technical", folder_id: 0), /positive integer/)
+
+    DmsfFolder.denied << folder
+    assert_error(@provider.search_files(query: "technical", folder_id: 10), /not accessible/)
+  end
+
+  def test_folder_of_another_project_is_rejected
+    foreign = add_folder(20, "Restricted", project: @other_project)
+
+    assert_error(@provider.search_files(query: "technical", folder_id: foreign.id), /not accessible/)
+    assert_error(@provider.summarize_folder(folder_id: foreign.id), /not accessible/)
+  end
+
+  def test_content_search_candidates_outside_the_folder_are_ignored
+    folder = add_folder(10, "Contracts")
+    other = add_folder(11, "Archive")
+    @file.title = "Report"
+    @file.name = "report.pdf"
+    @file.description = "None"
+    @file.dmsf_folder_id = folder.id
+    outside = matching_file(44, folder: other)
+    RedmineDmsf.xapian_available = true
+    DmsfFile.search_result = [[@file, outside], 2]
+
+    result = @provider.search_files(query: "only-in-document-body", folder_id: 10)
+
+    assert_equal [42], ids(result)
+    assert_equal "dmsf_search", result[:documents].first[:match_source]
+  end
+
+  def test_summarize_folder_sends_only_the_newest_requested_documents
+    folder = add_folder(10, "Contracts")
+    Array.new(4) do |index|
+      file = DmsfFile.new(50 + index, project: @project,
+                          revision: DmsfFileRevision.new(90 + index, attachment: FakeAttachment.new))
+      file.dmsf_folder_id = folder.id
+      file.updated_at = Time.at(1_000 + index)
+      DmsfFile.records << file
+    end
+
+    result = @provider.summarize_folder(folder_id: 10, max_documents: 2)
+
+    refute result.key?(:error), "Unexpected tool error: #{result.inspect}"
+    assert_equal [53, 52], result[:documents].map { |document| document.fetch(:id) }
+    assert_equal 4, result[:folder][:document_count]
+    assert_equal 2, result[:skipped][:not_selected]
+    assert_equal 0, result[:skipped][:unsupported_or_too_large]
+    assert_equal false, result[:skipped][:scan_truncated]
+    assert_equal 1, @provider.llm_calls.length
+    assert_equal 2, @provider.llm_calls.first[:file_paths].length
+    assert_includes @provider.llm_calls.first[:prompt], "Contracts"
+    assert_includes @provider.llm_calls.first[:prompt], "untrusted"
+  end
+
+  def test_summarize_folder_reports_unsupported_documents_without_downloading_them
+    folder = add_folder(10, "Contracts")
+    office = DmsfFile.new(60, project: @project,
+                          revision: DmsfFileRevision.new(95, attachment: FakeAttachment.new))
+    office.name = "spec.docx"
+    office.dmsf_folder_id = folder.id
+    DmsfFile.records << office
+    @file.dmsf_folder_id = folder.id
+
+    result = @provider.summarize_folder(folder_id: 10)
+
+    assert_equal [42], result[:documents].map { |document| document.fetch(:id) }
+    assert_equal 1, result[:skipped][:unsupported_or_too_large]
+    assert_equal 0, office.revision.attachment.downloads
+  end
+
+  def test_summarize_folder_respects_the_total_size_budget
+    AiHelperSetting.attachment_max_size_mb = 1
+    folder = add_folder(10, "Contracts")
+    [70, 71].each_with_index do |id, index|
+      file = DmsfFile.new(id, project: @project,
+                          revision: DmsfFileRevision.new(96 + index,
+                                                         attachment: FakeAttachment.new("a" * 700_000)))
+      file.dmsf_folder_id = folder.id
+      DmsfFile.records << file
+    end
+
+    result = @provider.summarize_folder(folder_id: 10)
+
+    assert_equal 1, result[:documents].length
+    assert_equal 1, result[:skipped][:not_selected]
+    assert_equal 1, @provider.llm_calls.first[:file_paths].length
+  end
+
+  def test_summarize_folder_requires_a_folder_and_the_enabled_integration
+    assert_error(@provider.summarize_folder, /folder_id or folder_path is required/)
+    assert_error(@provider.summarize_folder(folder_id: 10), /not accessible/)
+
+    folder = add_folder(10, "Contracts")
+    @file.dmsf_folder_id = folder.id
+    ENV["REDMINE_AI_HELPER_DMSF_ENABLED"] = "0"
+    assert_error(@provider.summarize_folder(folder_id: 10), /unavailable/)
+    assert_empty @provider.llm_calls
+  end
+
+  def test_summarize_folder_without_supported_documents_fails_closed
+    folder = add_folder(10, "Contracts")
+    office = DmsfFile.new(60, project: @project,
+                          revision: DmsfFileRevision.new(95, attachment: FakeAttachment.new))
+    office.name = "spec.docx"
+    office.dmsf_folder_id = folder.id
+    DmsfFile.records << office
+
+    assert_error(@provider.summarize_folder(folder_id: 10), /no supported DMSF document/)
+    assert_empty @provider.llm_calls
+  end
+
+  def test_document_action_is_offered_only_for_permitted_documents
+    assert @provider.document_action_visible?(@file)
+
+    ENV["REDMINE_AI_HELPER_DMSF_ENABLED"] = "0"
+    refute @provider.document_action_visible?(@file)
+
+    ENV["REDMINE_AI_HELPER_DMSF_ENABLED"] = "1"
+    DmsfFolder.denied << @file.folder
+    refute @provider.document_action_visible?(@file)
+  end
+
   private
+
+  def add_folder(id, title, project: @project, parent: nil)
+    folder = DmsfFolder.new(id, project: project, title: title, dmsf_folder: parent)
+    DmsfFolder.records << folder
+    folder
+  end
+
+  def matching_file(id, folder: nil)
+    file = DmsfFile.new(id, project: @project, revision: @revision)
+    file.dmsf_folder_id = folder&.id
+    DmsfFile.records << file
+    file
+  end
 
   def ids(result)
     refute result.key?(:error), "Unexpected tool error: #{result.inspect}"

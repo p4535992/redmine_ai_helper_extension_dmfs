@@ -14,16 +14,22 @@ Installable ZIP/TAR.GZ packages and SHA-256 checksums are published under
 The [release workflow](docs/releasing.md) validates the plugin on Ruby 3.2, 3.3
 and 3.4 before publishing a new version.
 
-**Version:** 0.1.0 · **License:** GPL-3.0-or-later, with the original MIT notices
+**Version:** 0.3.0 · **License:** GPL-3.0-or-later, with the original MIT notices
 preserved for adapted AI Helper code.
 
 ## What this plugin does
 
 - Finds permitted DMSF documents by current filename, title and description.
+- Restricts a search to one DMSF folder, by ID or by path, optionally including
+  nested folders.
 - Optionally includes candidates from DMSF's existing Xapian search, which the
   administrator can turn off from AI Helper's settings page.
 - Analyzes the latest permitted PDF or UTF-8 text/code revision with the AI
   model already configured in AI Helper.
+- Summarizes a folder with a bounded number of documents and reports what was
+  skipped, instead of sending a whole large folder to the model.
+- Adds an **Ask AI Helper** action to DMSF document and folder pages, which opens
+  the AI Helper chat with a question already filled in.
 - Returns a normal DMSF document URL, current version and revision ID.
 - Checks AI Helper's project access rules, DMSF project permissions, folder
   ACLs and revision visibility before disclosing metadata or reading bytes.
@@ -125,8 +131,23 @@ requests to it when the integration is enabled.
 Example requests:
 
 - “Find the DMSF documents about the API specification in project 12.”
+- “Search only in the DMSF folder `Contracts/2026` for retention clauses.”
 - “Summarize DMSF document 42 and give me its original link and version.”
+- “Summarize the documents of DMSF folder 118, at most two of them.”
 - “Does the latest revision of DMSF document 42 describe the retention period?”
+
+### Ask AI Helper from a DMSF page
+
+DMSF document and folder pages show an **Ask AI Helper** action next to the page's
+own actions. It fills the AI Helper chat input with a question about that document
+or folder and opens the chat; it never sends the message on its own, so the user
+can edit the question first.
+
+The action is decided server-side and appears only when the integration is
+enabled, the user may see the document or folder, and the AI Helper chat is
+available for the project (module enabled and a model profile configured). DMSF
+exposes no view hook on those pages, so the action is inserted by a small script
+rendered from the layout hook; the plugin does not copy or patch DMSF views.
 
 Use a user account with the appropriate permissions. A missing or inaccessible
 document receives the same generic access error. If a required opt-in is off,
@@ -137,8 +158,14 @@ direct tool calls are rejected.
 
 | Tool | Parameters | Result |
 | --- | --- | --- |
-| `search_files` | Required `query` (up to 200 characters); optional `project_id`; `limit` defaults to 10, capped at 20 | Current authorized document metadata and search-coverage flags |
+| `search_files` | Required `query` (up to 200 characters); optional `project_id`, `folder_id` or `folder_path`, `include_subfolders`; `limit` defaults to 10, capped at 20 | Current authorized document metadata, the resolved folder scope and search-coverage flags |
 | `analyze_file` | Required `file_id`; optional `question` (up to 2,000 characters) | Current authorized metadata and the configured model's analysis |
+| `summarize_folder` | Required `folder_id` or `folder_path`; optional `project_id`, `include_subfolders`, `max_documents` (1 to 5, default 3), `question` | Folder scope, the analyzed documents, what was skipped and why, and the configured model's answer |
+
+`folder_id` and `folder_path` are mutually exclusive. A path is resolved from the
+project root, segment by segment, matching titles case-insensitively; the folder
+must pass DMSF's own visibility and folder-permission checks. `include_subfolders`
+walks at most 500 folders and reports `folders_truncated` when it stops early.
 
 Supported analysis extensions:
 `.pdf`, `.txt`, `.md`, `.csv`, `.json`, `.xml`, `.log`, `.rb`, `.py`, `.js`,
@@ -154,9 +181,20 @@ returned to the calling agent.
 ### Search coverage
 
 The metadata stage scans at most 2,000 candidate documents in authorized projects
-and returns at most 20 permitted matches. An optional DMSF search call has its
-own 2,000-candidate cap; DMSF's Xapian implementation has additional internal
-limits. These are separate bounds, not a claim that all content was searched.
+(or in the selected folder scope) and returns at most 20 permitted matches. An
+optional DMSF search call has its own 2,000-candidate cap; DMSF's Xapian
+implementation has additional internal limits. These are separate bounds, not a
+claim that all content was searched.
+
+A folder filter narrows the scan but does not remove the bound: a folder with more
+than 2,000 documents can still be scanned only partially. The response reports the
+folder size in `folder.document_count` and sets `truncated`, so the agent can tell
+the user that the result is incomplete and suggest a narrower folder or query.
+
+`summarize_folder` never sends a whole folder. It selects at most `max_documents`
+(1 to 5) supported documents, newest first, keeps the total payload within AI
+Helper's attachment size limit, and reports `skipped.unsupported_or_too_large`,
+`skipped.not_selected` and `skipped.scan_truncated`.
 
 Search responses include:
 
@@ -164,6 +202,7 @@ Search responses include:
 | --- | --- |
 | `scanned` | Candidate rows examined in the extension's metadata stage |
 | `truncated` | An extension scan/result/candidate bound was encountered |
+| `folder` | `id`, `path`, `project_id`, `include_subfolders`, `document_count` and `folders_truncated`, or `null` when the search is not folder-scoped |
 | `content_search` | `unavailable`, `attempted`, `disabled` when the administrator turned full-text search off, or `not_attempted` when no projects are authorized |
 | `content_search_limited` | The returned DMSF candidate batch reached its bound or reported more candidates |
 | Per-document `match_source` | `current_metadata` or `dmsf_search` |
@@ -185,7 +224,11 @@ to verify a statement against the current document.
 - `DmsfExtensionAgent < RedmineAiHelper::BaseAgent` registers automatically and
   returns the extension's provider through `available_tool_providers`.
 - `DmsfTools < RedmineAiHelper::Tools::FileTools` reuses AI Helper's configured
-  model and project access rules while declaring only two read-only tools.
+  model and project access rules while declaring only three read-only tools.
+- `lib/redmine_ai_helper_dmsf/document_action.rb` decides, server-side, whether a
+  DMSF document or folder page offers the chat action;
+  `lib/redmine_ai_helper_dmsf/view_hook.rb` renders the layout hook partial that
+  inserts it. DMSF views are neither copied nor patched.
 - The agent's prompts live in this plugin's English, Italian and Japanese
   locales, with English fallback. They do not depend on an added upstream prompt.
 - `lib/redmine_ai_helper_dmsf/patches/` appends the DMSF tab to AI Helper's

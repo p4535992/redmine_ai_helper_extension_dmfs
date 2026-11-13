@@ -22,6 +22,8 @@ unless defined?(Rails) && Rails.application&.initialized?
   require environment
 end
 
+require "ostruct"
+
 module RedmineAiHelperDmsfSmoke
   # Abort on the first failed contract; never present a partial run as success.
   def self.check(label, condition)
@@ -43,9 +45,10 @@ module RedmineAiHelperDmsfSmoke
     # it because the tested methods need no provider, project or conversation.
     agent = agent_class.allocate
     check("extension tool provider", agent.available_tool_providers == [tools_class])
-    check("exactly two tool definitions", tools_class.function_registry.keys.sort == %i[analyze_file search_files])
+    check("exactly three tool definitions",
+          tools_class.function_registry.keys.sort == %i[analyze_file search_files summarize_folder])
     tool_classes = tools_class.tool_classes
-    check("exactly two generated tools", tool_classes.length == 2)
+    check("exactly three generated tools", tool_classes.length == 3)
     check("all tools are read-only", tool_classes.all? { |tool| tool.write_tool? == false })
 
     settings = AiHelperSetting.order(:id).first
@@ -58,8 +61,35 @@ module RedmineAiHelperDmsfSmoke
     puts "DMSF agent state: #{expected_enabled ? 'enabled' : 'disabled'}"
 
     check_settings_page_integration
+    check_document_action(tools_class)
     check_backstories(agent)
     puts "Registration smoke checks passed; document access and model execution were not exercised."
+  end
+
+  # The page action is offered by a layout hook, because DMSF has no view hook
+  # on its document or folder page. Verify registration, the rendered partial and
+  # the negative case without touching a real page.
+  def self.check_document_action(tools_class)
+    listeners = Redmine::Hook.hook_listeners(:view_layouts_base_body_bottom)
+    check("layout hook is registered", listeners.any? { |listener| listener.is_a?(RedmineAiHelperDmsf::ViewHook) })
+
+    partial = File.join(Redmine::Plugin.find(:redmine_ai_helper_extension_dmfs).directory,
+                        "app/views/redmine_ai_helper_dmsf/_document_action.html.erb")
+    check("document action partial exists", File.file?(partial))
+
+    %i[en it ja].each do |locale|
+      check("#{locale} document action label", !I18n.t("redmine_ai_helper_dmsf.document_action.label",
+                                                        locale: locale, default: nil).to_s.empty?)
+    end
+
+    other_page = OpenStruct.new(controller_name: "issues", action_name: "show")
+    check("action is not offered outside DMSF", RedmineAiHelperDmsf::DocumentAction.target(other_page).nil?)
+
+    # An unsaved document has no project or revision, so the action must be
+    # refused. The positive path needs real DMSF data and is covered by the
+    # laboratory smoke check.
+    check("document action is hidden without document access",
+          tools_class.new.document_action_visible?(DmsfFile.new) == false)
   end
 
   # The extension settings are rendered inside AI Helper's own settings page.
@@ -96,7 +126,7 @@ module RedmineAiHelperDmsfSmoke
     tracer.enable do
       %i[en it ja].each do |locale|
         I18n.with_locale(locale) do
-          expected = I18n.t(key, locale: locale, raise: true)
+          expected = backstory_text(locale)
           check("#{locale} backstory uses extension translations", agent.backstory == expected && !expected.empty?)
         end
       end
@@ -108,13 +138,23 @@ module RedmineAiHelperDmsfSmoke
       end
       if fallback_locale
         I18n.with_locale(fallback_locale) do
-          check("English backstory fallback", agent.backstory == I18n.t(key, locale: :en, raise: true))
+          check("English backstory fallback", agent.backstory == backstory_text(:en))
         end
       else
         puts "SKIP: English fallback (no untranslated Redmine locale is enabled)"
       end
     end
     check("backstory is independent of upstream prompt files", upstream_calls.empty?)
+  end
+
+  # The agent joins every instruction key it knows; a missing translation is
+  # skipped, so the expectation mirrors that contract.
+  # @param locale [Symbol] locale to read
+  # @return [String] expected backstory
+  def self.backstory_text(locale)
+    %w[agent_backstory agent_backstory_folders].filter_map do |name|
+      I18n.t("redmine_ai_helper_dmsf.#{name}", locale: locale, default: nil)
+    end.join("\n")
   end
 end
 

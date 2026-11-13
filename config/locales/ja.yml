@@ -30,4 +30,13 @@ ja:
       index_available: "利用可能です"
       index_unavailable: "利用できないため、内容検索は行われません"
       activation_note: "DMSF エージェントには REDMINE_AI_HELPER_DMSF_ENABLED=1 と「Send attachments to LLM」（一般タブ）も必要です。"
+    document_action:
+      label: "AI Helper に質問"
+      document_prompt: "DMSF 文書「%{title}」(ID %{id}) を要約して、内容を説明してください。"
+      folder_prompt: "DMSF フォルダ「%{path}」(ID %{id}) の文書を要約してください。"
+    agent_backstory_folders: |-
+      search_files で folder_id または folder_path を指定すると、1 つの DMSF フォルダに検索を限定できます。include_subfolders で下位フォルダも対象になります。
+      summarize_folder は、ユーザーが特定のフォルダについて尋ねた場合にのみ使用してください。送信する文書は少数に限られ、省略した文書を報告します。大きなフォルダの全文書を読んだとは述べないでください。
+      DMSF ページからチャットを開いた場合、事前入力された質問がユーザーの依頼です。これらのツールで回答し、使用した文書を引用してください。
+
 

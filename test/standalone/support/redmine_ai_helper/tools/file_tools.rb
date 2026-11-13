@@ -6,6 +6,14 @@
 # This intentionally does not implement AI Helper's DSL/schema internals.
 module RedmineAiHelper
   module Tools
+    # Projects granted to every provider instance, so code that creates a
+    # provider internally (the DMSF page action) sees the same scope as the
+    # tests instead of an empty one. Kept outside the class because class-level
+    # instance variables are not inherited by DmsfTools.
+    class << self
+      attr_accessor :default_allowed_projects
+    end
+
     class FileTools
       class UserError < StandardError; end
 
@@ -30,7 +38,7 @@ module RedmineAiHelper
       attr_reader :llm_calls
 
       def initialize
-        @allowed_projects = []
+        @allowed_projects = Array(RedmineAiHelper::Tools.default_allowed_projects)
         @llm_calls = []
       end
 
