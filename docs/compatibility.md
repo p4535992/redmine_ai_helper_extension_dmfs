@@ -28,7 +28,10 @@ DMSF 5.1.x/5.2.x raise that requirement to Redmine 7.0.0. DMSF's own installatio
 instructions still apply. This extension does not migrate DMSF data or storage.
 
 Future versions are not automatically certified by satisfying the numeric
-minimum. DMSF implementation details are maintained here rather than in AI
+minimum. The version gate reads the numeric prefix of the installed DMSF
+version, so a development build that reports `5.2.1 devel` is evaluated as
+`5.2.1` instead of raising in `Gem::Version`; a version string without digits
+fails closed. DMSF implementation details are maintained here rather than in AI
 Helper's core repository.
 
 ## AI Helper extension interfaces

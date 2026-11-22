@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Accept a DMSF version with a development suffix such as `5.2.1 devel`.
+  `available?` now compares only the numeric prefix instead of passing the whole
+  string to `Gem::Version`, which raised `ArgumentError` and left the DMSF agent
+  unavailable on a development build. A version string without digits still
+  fails closed.
+
 ## 0.3.0 — 2026-11-13
 
 - Restrict `search_files` to one DMSF folder with `folder_id` or `folder_path`

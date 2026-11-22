@@ -77,6 +77,16 @@ class DmsfToolsTest < Minitest::Test
     assert_no_document_read
   end
 
+  def test_development_version_suffix_is_ignored_and_missing_digits_fail_closed
+    Redmine::Plugin.version = "5.2.1 devel"
+
+    assert RedmineAiHelperDmsf::DmsfTools.available?
+    assert RedmineAiHelperDmsf::DmsfTools.enabled?
+
+    Redmine::Plugin.version = "devel"
+    refute RedmineAiHelperDmsf::DmsfTools.available?
+  end
+
   def test_missing_dmsf_model_fails_closed
     original = Object.send(:remove_const, :DmsfFileRevision)
 

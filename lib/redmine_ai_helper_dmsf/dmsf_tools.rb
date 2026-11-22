@@ -33,7 +33,10 @@ module RedmineAiHelperDmsf
       return false unless Redmine::Plugin.installed?(:redmine_dmsf)
       return false unless defined?(::DmsfFile) && defined?(::DmsfFolder) && defined?(::DmsfFileRevision)
 
-      Gem::Version.new(Redmine::Plugin.find(:redmine_dmsf).version) >= MINIMUM_DMSF_VERSION &&
+      # DMSF may report a development suffix ("5.2.1 devel") that Gem::Version
+      # rejects; compare only the numeric prefix.
+      version = Redmine::Plugin.find(:redmine_dmsf).version.to_s[/\d+(?:\.\d+)*/]
+      !version.nil? && Gem::Version.new(version) >= MINIMUM_DMSF_VERSION &&
         ::DmsfFileRevision.method_defined?(:file) && ::DmsfFolder.respond_to?(:permissions?)
     end
 
