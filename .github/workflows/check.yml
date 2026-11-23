@@ -1,0 +1,59 @@
+name: Check
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Ruby ${{ matrix.ruby }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.2", "3.3", "3.4"]
+
+    steps:
+      - name: Check out the requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: false
+
+      - name: Install the standalone test dependency
+        run: gem install minitest --version 5.25.5 --no-document
+
+      - name: Check Ruby syntax
+        run: git ls-files -z -- '*.rb' | xargs -0 -r -n 1 ruby -c
+
+      - name: Run standalone DMSF tools tests
+        run: ruby -Itest/standalone test/standalone/dmsf_tools_test.rb
+
+      - name: Run standalone document action tests
+        run: ruby -Itest/standalone test/standalone/document_action_test.rb
+
+      - name: Test release packaging and publication guards
+        if: matrix.ruby == '3.2'
+        run: python3 -m unittest discover -s test/release -p 'test_*.py' -v
+
+      - name: Build and verify installable archives
+        if: matrix.ruby == '3.2'
+        run: |
+          python3 scripts/build_release.py --output-dir dist
+          (cd dist && sha256sum -c SHA256SUMS)
