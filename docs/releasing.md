@@ -1,33 +1,33 @@
 # Publishing a release
 
 The [Create Release workflow](../.github/workflows/release.yml) builds an installable
-plugin archive from the selected committed revision. You select the version
-(`X.Y.Z` only) and GitHub release channel (`stable` or `prerelease`). The channel
-changes GitHub publication metadata, not the source ZIP or the version string.
+plugin archive from the selected committed revision. Select a numeric `X.Y.Z`
+release label and a GitHub channel (`release` or `prerelease`). Neither choice
+rewrites the selected source code or the version embedded in the ZIP.
 The workflow uses the repository's `GITHUB_TOKEN`; no additional release secret
 is required.
 
 ## Triggering a release
 
-For a new version:
+1. Commit the source to be distributed and push it to the selected branch.
+2. Open **Actions → Create Release → Run workflow** and select that branch.
+3. Enter a numeric **version** such as `0.4.0`, never a leading `v` or suffix.
+4. Select the **channel** dropdown: `release` (default) publishes a normal
+   release marked Latest; `prerelease` publishes a GitHub prerelease, not Latest.
 
-1. Update `RedmineAiHelperDmsf::VERSION` in `version.rb` to a numeric version such as `0.4.0`.
-2. Add the matching `## 0.4.0` section to `CHANGELOG.md`.
-3. Commit the intended source, version and changelog changes.
-4. Open **Actions → Create Release → Run workflow** and select the source branch.
-5. Enter **version** `0.4.0` (no `v`, `-rc.1`, or other suffix) and choose **channel**:
-   - `stable` (default): publish as a normal GitHub release and mark it latest.
-   - `prerelease`: publish as a GitHub prerelease, without marking it latest.
+Both channels package the exact same committed source. The input `0.4.0` labels
+the GitHub tag `v0.4.0` and ZIP/TAR.GZ assets but **does not change version.rb
+inside the source archive**. If the source says `0.3.0`, the installed plugin
+still reports `0.3.0`. For matching internal version numbers, edit and commit
+`version.rb` before publishing.
 
-Both choices use tag `v0.4.0` and publish archives named
-`redmine_ai_helper_extension_dmfs-0.4.0.zip` and
-`redmine_ai_helper_extension_dmfs-0.4.0.tar.gz` from the exact selected commit.
-The prerelease choice does not change the version or files inside the archives.
+Notes use the matching `CHANGELOG.md` section, or `Unreleased` when no numbered
+entry exists, or a generic source-snapshot note when neither is present.
+A mismatch between input and source version is explicitly recorded in notes.
 
-The Create Release workflow runs **only when manually started**. Pushing to a
-branch triggers the separate Check workflow, not release publication.
-GitHub supports only one release per tag: `stable` and `prerelease` are not
-two different assets or tags for the same version.
+This release workflow is manual-only; pushing a branch triggers **Check**.
+GitHub supports only one release per tag, not a separate release and prerelease
+with the same tag.
 
 ## Checks and assets
 
@@ -51,7 +51,7 @@ not the installation directory. This preserves the plugin ID and Redmine load
 order. The archives include the GPL license, original MIT notice, attribution,
 documentation and tests.
 
-Release notes come from the matching changelog section. They also explain that
+Release notes prefer the matching changelog section, then Unreleased, then generic snapshot notes. They also explain that
 standalone CI uses dependency doubles: it does not certify a real Redmine/DMSF
 installation, storage backend, Xapian index or LLM provider. Perform the
 [installation acceptance checks](testing.md) separately.
@@ -61,7 +61,7 @@ installation, storage backend, Xapian index or LLM provider. Perform the
 - A published release for the same tag and channel is reported as already
   published; its assets, tag and notes are left unchanged. If the same tag was
   published in the other channel, publication stops instead of silently changing
-  its status. Promoting a prerelease to stable is a separate GitHub operation.
+  its status. Promoting a prerelease to a normal release is a separate GitHub operation.
 - A tag that exists without a published release must resolve to the tested
   commit before it can be used. A tag pointing elsewhere stops publication.
 - A leftover draft stops publication for review. The workflow does not delete
@@ -80,7 +80,7 @@ From a Git checkout with Python 3 and Git installed:
 
 ```bash
 python3 -m unittest discover -s test/release -p 'test_*.py' -v
-python3 scripts/build_release.py --output-dir dist
+python3 scripts/build_release.py --output-dir dist --version 0.4.0
 ```
 
 The builder archives **committed HEAD**, not uncommitted changes. It writes

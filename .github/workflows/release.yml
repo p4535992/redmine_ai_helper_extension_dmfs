@@ -5,15 +5,15 @@ on:
   workflow_dispatch:
     inputs:
       channel:
-        description: "Stable updates latest; prerelease marks the GitHub release (same X.Y.Z ZIP)"
+        description: "Release marks latest; prerelease is marked on GitHub only (same source ZIP)"
         required: true
         type: choice
-        default: stable
+        default: release
         options:
-          - stable
+          - release
           - prerelease
       version:
-        description: "Only X.Y.Z (e.g. 0.4.0), no v or suffix; must match version.rb and CHANGELOG.md"
+        description: "Only X.Y.Z (e.g. 0.4.0); release label, does not change version.rb"
         required: true
         type: string
 
@@ -80,7 +80,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Validate requested version, channel, changelog, and source commit
+      - name: Validate requested version, channel, and source commit
         id: request
         env:
           RELEASE_VERSION: ${{ inputs.version }}
@@ -89,20 +89,15 @@ jobs:
         run: |
           python3 - <<'PY'
           import os
-          from pathlib import Path
           import subprocess
-          from scripts.build_release import STABLE_VERSION, parse_version, changelog_section
+          from scripts.build_release import STABLE_VERSION
 
           requested = os.environ["RELEASE_VERSION"]
           if not STABLE_VERSION.fullmatch(requested):
               raise SystemExit("Release version must be numeric X.Y.Z without v or suffix")
           channel = os.environ["RELEASE_CHANNEL"]
-          if channel not in {"stable", "prerelease"}:
-              raise SystemExit("Release channel must be stable or prerelease")
-          actual = parse_version(Path("version.rb").read_text(encoding="utf-8"))
-          if requested != actual:
-              raise SystemExit(f"Requested version {requested} does not match version.rb ({actual})")
-          changelog_section(Path("CHANGELOG.md").read_text(encoding="utf-8"), requested)
+          if channel not in {"release", "prerelease"}:
+              raise SystemExit("Release channel must be release or prerelease")
           commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           if commit != os.environ["SOURCE_COMMIT"]:
               raise SystemExit("Checkout does not match the selected workflow revision")
@@ -114,7 +109,9 @@ jobs:
           PY
 
       - name: Build installable plugin packages from the selected commit
-        run: python3 scripts/build_release.py --output-dir dist
+        env:
+          RELEASE_VERSION: ${{ steps.request.outputs.version }}
+        run: python3 scripts/build_release.py --output-dir dist --version "$RELEASE_VERSION"
 
       - name: Verify release manifest, provenance, and checksums
         env:

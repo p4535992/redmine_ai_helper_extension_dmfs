@@ -82,6 +82,19 @@ def changelog_section(changelog: str, version: str) -> str:
     return body
 
 
+def release_changes(changelog: str, version: str, *, fallback: bool = False) -> str:
+    """Use matching release notes or the Unreleased notes for a labeled source snapshot."""
+    if not fallback:
+        return changelog_section(changelog, version)
+    headings = re.findall(r"(?m)^##[ \t]+([^\r\n]+)[ \t]*$", changelog)
+    numbered = re.compile(re.escape(version) + r"(?:[ \t]+[—–-][ \t]+.+)?")
+    if any(numbered.fullmatch(heading.strip()) for heading in headings):
+        return changelog_section(changelog, version)
+    if any(heading.strip() == "Unreleased" for heading in headings):
+        return "Changes listed as Unreleased in the selected source:\n\n" + changelog_section(changelog, "Unreleased")
+    return "Source snapshot from the selected Git commit; no matching release changelog entry."
+
+
 def tracked_files(repository: Path) -> set[str]:
     """Enumerate the committed regular files, rejecting unbundled Git submodules."""
     paths = set()
@@ -174,7 +187,7 @@ def resolve_output_directory(repository: Path, requested: Path, source_files: se
     return output
 
 
-def build_release(repository: Path, requested_output: Path = Path("dist")) -> dict:
+def build_release(repository: Path, requested_output: Path = Path("dist"), release_version: str | None = None) -> dict:
     repository = repository.resolve()
     actual_root = Path(git_bytes(repository, "rev-parse", "--show-toplevel").decode("utf-8").strip()).resolve()
     if actual_root != repository:
@@ -183,8 +196,14 @@ def build_release(repository: Path, requested_output: Path = Path("dist")) -> di
     if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", commit):
         raise ReleaseBuildError("Git HEAD did not resolve to a complete commit ID")
 
-    version = parse_version(git_bytes(repository, "show", "HEAD:version.rb").decode("utf-8"))
-    changes = changelog_section(git_bytes(repository, "show", "HEAD:CHANGELOG.md").decode("utf-8"), version)
+    source_version = parse_version(git_bytes(repository, "show", "HEAD:version.rb").decode("utf-8"))
+    if release_version is not None and (
+        not isinstance(release_version, str) or not STABLE_VERSION.fullmatch(release_version)
+    ):
+        raise ReleaseBuildError("Requested release version must be numeric X.Y.Z without v or suffix")
+    version = source_version if release_version is None else release_version
+    changelog = git_bytes(repository, "show", "HEAD:CHANGELOG.md").decode("utf-8")
+    changes = release_changes(changelog, version, fallback=release_version is not None)
     source_files = tracked_files(repository)
     output = resolve_output_directory(repository, requested_output, source_files)
 
@@ -201,8 +220,13 @@ def build_release(repository: Path, requested_output: Path = Path("dist")) -> di
     basename = f"{PLUGIN_DIRECTORY}-{version}"
     archives = {f"{basename}.zip": zip_payload, f"{basename}.tar.gz": compressed_payload}
     checksums = "".join(f"{hashlib.sha256(payload).hexdigest()}  {name}\n" for name, payload in archives.items())
+    source_version_note = (
+        f"Source version.rb: {source_version}. The installable archive is an unmodified "
+        f"snapshot of the selected commit; the release label is {version}.\n\n"
+        if version != source_version else ""
+    )
     notes = (
-        f"# Redmine AI Helper DMSF Extension {version}\n\n{changes}\n\n"
+        f"# Redmine AI Helper DMSF Extension {version}\n\n{source_version_note}{changes}\n\n"
         "## Validation scope\n\n"
         "The release workflow publishes after the standalone tests and syntax checks pass. "
         "Those checks use isolated dependency doubles; real Redmine/DMSF installations, "
@@ -211,6 +235,7 @@ def build_release(repository: Path, requested_output: Path = Path("dist")) -> di
     )
     manifest = {
         "version": version,
+        "source_version": source_version,
         "tag": f"v{version}",
         "commit": commit,
         "assets": [*archives, "SHA256SUMS"],
@@ -247,9 +272,12 @@ def main() -> int:
         "--output-dir", type=Path, default=Path("dist"),
         help="output directory (default: dist under the repository root)",
     )
+    parser.add_argument("--version", type=str, default=None,
+                        help="Numeric GitHub release X.Y.Z label (does not rewrite the source)")
     arguments = parser.parse_args()
     try:
-        manifest = build_release(Path(__file__).resolve().parents[1], arguments.output_dir)
+        manifest = build_release(Path(__file__).resolve().parents[1],
+                                 arguments.output_dir, release_version=arguments.version)
     except (ReleaseBuildError, OSError, UnicodeError) as error:
         print(f"Release build failed: {error}", file=sys.stderr)
         return 1

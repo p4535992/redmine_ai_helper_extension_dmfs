@@ -23,7 +23,7 @@ import urllib.request
 PLUGIN_DIRECTORY = "redmine_ai_helper_extension_dmfs"
 VERSION_PATTERN = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
 COMMIT_PATTERN = r"[0-9a-f]{40}"
-RELEASE_CHANNELS = ("stable", "prerelease")
+RELEASE_CHANNELS = ("release", "prerelease")
 API_BASE = "https://api.github.com"
 
 
@@ -121,7 +121,7 @@ def _repository_name(repository: str) -> str:
 def normalize_release_channel(channel: str) -> str:
     """Only GitHub publication state depends on the release channel."""
     if not isinstance(channel, str) or channel not in RELEASE_CHANNELS:
-        raise ReleaseError("Release channel must be stable or prerelease")
+        raise ReleaseError("Release channel must be release or prerelease")
     return channel
 
 
@@ -210,7 +210,7 @@ def _published_release(release: dict[str, Any], tag: str, channel: str) -> bool:
     if not isinstance(release.get("published_at"), str) or not release["published_at"]:
         raise ReleaseError(f"Release {tag} is not confirmed published")
     if release["prerelease"] != (channel == "prerelease"):
-        existing_channel = "prerelease" if release["prerelease"] else "stable"
+        existing_channel = "prerelease" if release["prerelease"] else "release"
         raise ReleaseError(
             f"Release {tag} already exists with channel {existing_channel}; "
             "published releases are not changed automatically"
@@ -225,7 +225,7 @@ def publish_release(
     root: Path,
     api=None,
     runner=None,
-    channel: str = "stable",
+    channel: str = "release",
 ) -> str:
     """Create one release in the chosen GitHub channel without changing package bytes."""
     channel = normalize_release_channel(channel)

@@ -337,7 +337,7 @@ class PublicationTests(ArtifactFixtureTest):
             [], 0, stdout=RELEASE_URL + "\n", stderr=""
         ))
 
-    def publish(self, api, channel="stable"):
+    def publish(self, api, channel="release"):
         with mock.patch("sys.stdout", new_callable=io.StringIO):
             return publisher.publish_release(
                 self.plan, REPOSITORY, TOKEN, self.root,
@@ -416,7 +416,7 @@ class PublicationTests(ArtifactFixtureTest):
         api = FakeAPI([published_release(prerelease=True)])
 
         with self.assertRaisesRegex(publisher.ReleaseError, "channel"):
-            self.publish(api, channel="stable")
+            self.publish(api, channel="release")
         self.runner.assert_not_called()
 
     def test_invalid_channel_is_rejected_before_api_access(self):

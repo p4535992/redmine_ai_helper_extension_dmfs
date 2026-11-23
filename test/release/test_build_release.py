@@ -87,6 +87,33 @@ class BuildReleaseTest(unittest.TestCase):
         self.assertIn("real Redmine/DMSF installations", notes)
         self.assertIn("not covered", notes)
 
+    def test_requested_version_labels_source_without_rewriting_archive(self):
+        self.write("CHANGELOG.md", "# Changelog\n\n## Unreleased\n\n- Pending changes.\n")
+        self.commit()
+        manifest = builder.build_release(self.repository, Path("snapshot"), release_version="0.4.0")
+        self.assertEqual("0.4.0", manifest["version"])
+        self.assertEqual("0.1.0", manifest["source_version"])
+        self.assertEqual("v0.4.0", manifest["tag"])
+        output = self.repository / "snapshot"
+        with zipfile.ZipFile(output / manifest["assets"][0]) as archive:
+            self.assertIn(b'VERSION = "0.1.0"',
+                          archive.read("redmine_ai_helper_extension_dmfs/version.rb"))
+        notes = (output / "release-notes.md").read_text()
+        self.assertIn("Pending changes.", notes)
+        self.assertIn("Source version.rb: 0.1.0", notes)
+
+    def test_requested_version_without_changelog_section_still_packages(self):
+        manifest = builder.build_release(self.repository, Path("snapshot"), release_version="0.4.0")
+        self.assertEqual("v0.4.0", manifest["tag"])
+        notes = (self.repository / "snapshot" / "release-notes.md").read_text()
+        self.assertIn("no matching release changelog entry", notes)
+
+    def test_invalid_requested_version_is_rejected(self):
+        for version in ("v0.4.0", "0.4", "0.4.0-rc.1", "01.4.0", "", 123):
+            with self.subTest(version=version), self.assertRaises(builder.ReleaseBuildError):
+                builder.build_release(self.repository, Path("snapshot"), release_version=version)
+        self.assertFalse((self.repository / "snapshot").exists())
+
     def test_uncommitted_content_is_not_accidentally_released(self):
         self.write("version.rb", 'VERSION = "9.9.9"\n')
         self.write("lib/example.rb", "# uncommitted content\n")
