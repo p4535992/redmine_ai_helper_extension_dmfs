@@ -1,11 +1,19 @@
 name: Create Release
-run-name: Release ${{ inputs.version }} from ${{ github.ref_name }}
+run-name: Release ${{ inputs.version }} (${{ inputs.channel }}) from ${{ github.ref_name }}
 
 on:
   workflow_dispatch:
     inputs:
+      channel:
+        description: "Stable updates latest; prerelease marks the GitHub release (same X.Y.Z ZIP)"
+        required: true
+        type: choice
+        default: stable
+        options:
+          - stable
+          - prerelease
       version:
-        description: "Stable X.Y.Z version without v, matching version.rb and CHANGELOG.md"
+        description: "Only X.Y.Z (e.g. 0.4.0), no v or suffix; must match version.rb and CHANGELOG.md"
         required: true
         type: string
 
@@ -60,6 +68,7 @@ jobs:
     outputs:
       version: ${{ steps.request.outputs.version }}
       tag: ${{ steps.request.outputs.tag }}
+      channel: ${{ steps.request.outputs.channel }}
       commit: ${{ steps.request.outputs.commit }}
       artifact_id: ${{ steps.package.outputs.artifact-id }}
 
@@ -71,10 +80,11 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Validate requested version, changelog, and source commit
+      - name: Validate requested version, channel, changelog, and source commit
         id: request
         env:
           RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
           SOURCE_COMMIT: ${{ github.sha }}
         run: |
           python3 - <<'PY'
@@ -85,7 +95,10 @@ jobs:
 
           requested = os.environ["RELEASE_VERSION"]
           if not STABLE_VERSION.fullmatch(requested):
-              raise SystemExit("Release version must be stable X.Y.Z, without v")
+              raise SystemExit("Release version must be numeric X.Y.Z without v or suffix")
+          channel = os.environ["RELEASE_CHANNEL"]
+          if channel not in {"stable", "prerelease"}:
+              raise SystemExit("Release channel must be stable or prerelease")
           actual = parse_version(Path("version.rb").read_text(encoding="utf-8"))
           if requested != actual:
               raise SystemExit(f"Requested version {requested} does not match version.rb ({actual})")
@@ -96,6 +109,7 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               print(f"version={requested}", file=output)
               print(f"tag=v{requested}", file=output)
+              print(f"channel={channel}", file=output)
               print(f"commit={commit}", file=output)
           PY
 
@@ -134,7 +148,7 @@ jobs:
           compression-level: 0
 
   publish:
-    name: Publish ${{ needs.build.outputs.tag }}
+    name: Publish ${{ needs.build.outputs.tag }} (${{ needs.build.outputs.channel }})
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -163,4 +177,5 @@ jobs:
       - name: Publish the checked release without overwriting existing versions
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish_release.py --directory dist
+          RELEASE_CHANNEL: ${{ needs.build.outputs.channel }}
+        run: python3 scripts/publish_release.py --directory dist --channel "$RELEASE_CHANNEL"

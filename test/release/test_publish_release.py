@@ -305,6 +305,7 @@ def published_release(**overrides):
     release = {
         "tag_name": TAG,
         "draft": False,
+        "prerelease": False,
         "published_at": "2026-11-12T12:00:00Z",
         "html_url": RELEASE_URL,
     }
@@ -336,10 +337,11 @@ class PublicationTests(ArtifactFixtureTest):
             [], 0, stdout=RELEASE_URL + "\n", stderr=""
         ))
 
-    def publish(self, api):
+    def publish(self, api, channel="stable"):
         with mock.patch("sys.stdout", new_callable=io.StringIO):
             return publisher.publish_release(
-                self.plan, REPOSITORY, TOKEN, self.root, api=api, runner=self.runner
+                self.plan, REPOSITORY, TOKEN, self.root,
+                api=api, runner=self.runner, channel=channel,
             )
 
     def test_published_release_is_left_unchanged_when_main_has_moved(self):
@@ -381,6 +383,7 @@ class PublicationTests(ArtifactFixtureTest):
         self.assertEqual(REPOSITORY, arguments[arguments.index("--repo") + 1])
         self.assertEqual(str(self.plan.notes_file), arguments[arguments.index("--notes-file") + 1])
         self.assertIn("--latest", arguments)
+        self.assertNotIn("--prerelease", arguments)
         self.assertNotIn("--generate-notes", arguments)
         self.assertNotIn("--clobber", arguments)
         self.assertNotIn(TOKEN, arguments)
@@ -390,6 +393,45 @@ class PublicationTests(ArtifactFixtureTest):
         self.assertEqual(self.root, self.runner.call_args.kwargs["cwd"])
         self.assertEqual([TAG, TAG], api.release_calls)
         self.assertEqual([TAG, TAG], api.tag_calls)
+
+    def test_prerelease_uses_same_version_and_archives_with_github_flag(self):
+        api = FakeAPI([None, published_release(prerelease=True)], [None, COMMIT])
+
+        self.assertEqual("published", self.publish(api, channel="prerelease"))
+        arguments = self.runner.call_args.args[0]
+        self.assertEqual(["gh", "release", "create", TAG], arguments[:4])
+        self.assertIn("--prerelease", arguments)
+        self.assertIn("--latest=false", arguments)
+        self.assertNotIn("--latest", arguments)
+        for asset in self.plan.assets:
+            self.assertIn(str(asset), arguments)
+
+    def test_prerelease_rerun_does_not_republish_existing_version(self):
+        api = FakeAPI([published_release(prerelease=True)])
+
+        self.assertEqual("skipped", self.publish(api, channel="prerelease"))
+        self.runner.assert_not_called()
+
+    def test_channel_mismatch_does_not_change_existing_release(self):
+        api = FakeAPI([published_release(prerelease=True)])
+
+        with self.assertRaisesRegex(publisher.ReleaseError, "channel"):
+            self.publish(api, channel="stable")
+        self.runner.assert_not_called()
+
+    def test_invalid_channel_is_rejected_before_api_access(self):
+        api = FakeAPI([])
+
+        with self.assertRaisesRegex(publisher.ReleaseError, "channel"):
+            self.publish(api, channel="candidate")
+        self.assertEqual([], api.release_calls)
+        self.runner.assert_not_called()
+
+    def test_github_must_confirm_prerelease_state(self):
+        api = FakeAPI([None, published_release(prerelease=False)], [None, COMMIT])
+
+        with self.assertRaisesRegex(publisher.ReleaseError, "channel"):
+            self.publish(api, channel="prerelease")
 
     def test_existing_matching_tag_can_be_used_without_moving_it(self):
         api = FakeAPI([None, published_release()], [COMMIT, COMMIT])

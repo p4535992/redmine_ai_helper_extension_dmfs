@@ -1,32 +1,33 @@
 # Publishing a release
 
-The [Release workflow](../.github/workflows/release.yml) builds an installable
-plugin archive and publishes a GitHub release using the version in `version.rb`.
-It uses the repository's `GITHUB_TOKEN`; no additional personal access token or
-release secret is required.
+The [Create Release workflow](../.github/workflows/release.yml) builds an installable
+plugin archive from the selected committed revision. You select the version
+(`X.Y.Z` only) and GitHub release channel (`stable` or `prerelease`). The channel
+changes GitHub publication metadata, not the source ZIP or the version string.
+The workflow uses the repository's `GITHUB_TOKEN`; no additional release secret
+is required.
 
 ## Triggering a release
 
 For a new version:
 
-1. Update `RedmineAiHelperDmsf::VERSION` in `version.rb` to a stable version such
-   as `0.1.1`.
-2. Add a matching `## 0.1.1` section to `CHANGELOG.md`, with the release date and
-   changes. Existing sections stay in the file.
-3. Commit both files with the intended source changes and push to `main`.
-4. Follow **Actions → Release**. A successful run publishes tag `v0.1.1` and
-   the release assets after every validation job succeeds.
+1. Update `RedmineAiHelperDmsf::VERSION` in `version.rb` to a numeric version such as `0.4.0`.
+2. Add the matching `## 0.4.0` section to `CHANGELOG.md`.
+3. Commit the intended source, version and changelog changes.
+4. Open **Actions → Create Release → Run workflow** and select the source branch.
+5. Enter **version** `0.4.0` (no `v`, `-rc.1`, or other suffix) and choose **channel**:
+   - `stable` (default): publish as a normal GitHub release and mark it latest.
+   - `prerelease`: publish as a GitHub prerelease, without marking it latest.
 
-Adding or changing the release workflow, its scripts, or its test files also
-starts a run on `main`. Updating `CHANGELOG.md` can retry a previously blocked
-version with a corrected changelog. Manual execution is available through
-**Actions → Release → Run workflow**, selecting **main**. Other branches are
-not published by this workflow.
+Both choices use tag `v0.4.0` and publish archives named
+`redmine_ai_helper_extension_dmfs-0.4.0.zip` and
+`redmine_ai_helper_extension_dmfs-0.4.0.tar.gz` from the exact selected commit.
+The prerelease choice does not change the version or files inside the archives.
 
-The initial addition of the workflow can therefore publish the current
-`0.1.0` without a separate manually created tag. The workflow creates the tag
-and release in the same run; it does not rely on a second workflow triggered
-by that tag.
+The Create Release workflow runs **only when manually started**. Pushing to a
+branch triggers the separate Check workflow, not release publication.
+GitHub supports only one release per tag: `stable` and `prerelease` are not
+two different assets or tags for the same version.
 
 ## Checks and assets
 
@@ -57,8 +58,10 @@ installation, storage backend, Xapian index or LLM provider. Perform the
 
 ## Existing versions and failures
 
-- A published release for the same version is reported as already published;
-  the workflow leaves its tag, notes and assets unchanged.
+- A published release for the same tag and channel is reported as already
+  published; its assets, tag and notes are left unchanged. If the same tag was
+  published in the other channel, publication stops instead of silently changing
+  its status. Promoting a prerelease to stable is a separate GitHub operation.
 - A tag that exists without a published release must resolve to the tested
   commit before it can be used. A tag pointing elsewhere stops publication.
 - A leftover draft stops publication for review. The workflow does not delete

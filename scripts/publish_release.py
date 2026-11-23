@@ -23,6 +23,7 @@ import urllib.request
 PLUGIN_DIRECTORY = "redmine_ai_helper_extension_dmfs"
 VERSION_PATTERN = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
 COMMIT_PATTERN = r"[0-9a-f]{40}"
+RELEASE_CHANNELS = ("stable", "prerelease")
 API_BASE = "https://api.github.com"
 
 
@@ -117,6 +118,13 @@ def _repository_name(repository: str) -> str:
     return repository
 
 
+def normalize_release_channel(channel: str) -> str:
+    """Only GitHub publication state depends on the release channel."""
+    if not isinstance(channel, str) or channel not in RELEASE_CHANNELS:
+        raise ReleaseError("Release channel must be stable or prerelease")
+    return channel
+
+
 class _NoRedirects(urllib.request.HTTPRedirectHandler):
     """Keep authenticated requests on their exact, canonical GitHub API URL."""
 
@@ -189,13 +197,24 @@ class GitHubAPI:
         raise ReleaseError(f"GitHub tag {tag} exceeds the annotated-tag resolution limit")
 
 
-def _published_release(release: dict[str, Any], tag: str) -> bool:
-    if not isinstance(release, dict) or release.get("tag_name") != tag or type(release.get("draft")) is not bool:
+def _published_release(release: dict[str, Any], tag: str, channel: str) -> bool:
+    if (
+        not isinstance(release, dict)
+        or release.get("tag_name") != tag
+        or type(release.get("draft")) is not bool
+        or type(release.get("prerelease")) is not bool
+    ):
         raise ReleaseError("GitHub returned inconsistent release metadata")
     if release["draft"]:
         raise ReleaseError(f"A draft release already exists for {tag}; inspect it before retrying")
     if not isinstance(release.get("published_at"), str) or not release["published_at"]:
         raise ReleaseError(f"Release {tag} is not confirmed published")
+    if release["prerelease"] != (channel == "prerelease"):
+        existing_channel = "prerelease" if release["prerelease"] else "stable"
+        raise ReleaseError(
+            f"Release {tag} already exists with channel {existing_channel}; "
+            "published releases are not changed automatically"
+        )
     return True
 
 
@@ -206,8 +225,10 @@ def publish_release(
     root: Path,
     api=None,
     runner=None,
+    channel: str = "stable",
 ) -> str:
-    """Create one release or explicitly preserve an already published version."""
+    """Create one release in the chosen GitHub channel without changing package bytes."""
+    channel = normalize_release_channel(channel)
     repository = _repository_name(repository)
     if not isinstance(token, str) or not token:
         raise ReleaseError("GH_TOKEN is required for release publication")
@@ -217,7 +238,7 @@ def publish_release(
 
     existing = api.release(plan.tag)
     if existing is not None:
-        _published_release(existing, plan.tag)
+        _published_release(existing, plan.tag, channel)
         print(f"Release {plan.tag} is already published; its tag and assets were left unchanged.")
         print(url)
         return "skipped"
@@ -233,7 +254,7 @@ def publish_release(
         "--target", plan.commit,
         "--title", f"Redmine AI Helper DMSF Extension {plan.tag}",
         "--notes-file", str(plan.notes_file),
-        "--latest",
+        *(["--prerelease", "--latest=false"] if channel == "prerelease" else ["--latest"]),
     ]
     try:
         result = runner(command, cwd=root, capture_output=True, text=True)
@@ -246,10 +267,10 @@ def publish_release(
     published = api.release(plan.tag)
     if published is None:
         raise ReleaseError("GitHub CLI completed, but the published release could not be verified")
-    _published_release(published, plan.tag)
+    _published_release(published, plan.tag, channel)
     if api.tag_commit(plan.tag) != plan.commit:
         raise ReleaseError("Published tag does not resolve to the tested commit; inspect the release")
-    print(f"Published {plan.tag} from tested commit {plan.commit}.")
+    print(f"Published {channel} release {plan.tag} from tested commit {plan.commit}.")
     print(url)
     return "published"
 
@@ -257,6 +278,7 @@ def publish_release(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", default="dist", help="Directory produced by build_release.py")
+    parser.add_argument("--channel", required=True, choices=RELEASE_CHANNELS, help="GitHub release channel")
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parents[1]
     directory = Path(args.directory)
@@ -276,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
         if result.returncode != 0:
             raise ReleaseError("Cannot identify the checked-out Git commit")
         plan = load_manifest(directory, result.stdout.strip(), os.environ.get("GITHUB_SHA"))
-        publish_release(plan, repository, token, root)
+        publish_release(plan, repository, token, root, channel=args.channel)
     except ReleaseError as error:
         print(f"Release publication failed: {error}", file=sys.stderr)
         return 1
