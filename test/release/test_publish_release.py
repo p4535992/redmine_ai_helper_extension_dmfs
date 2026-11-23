@@ -381,6 +381,7 @@ class PublicationTests(ArtifactFixtureTest):
         self.runner.assert_called_once()
         arguments = self.runner.call_args.args[0]
         self.assertEqual(["gh", "release", "create", TAG], arguments[:4])
+        self.assertEqual(TAG, arguments[arguments.index("--title") + 1])
         self.assertEqual(COMMIT, arguments[arguments.index("--target") + 1])
         self.assertEqual(REPOSITORY, arguments[arguments.index("--repo") + 1])
         self.assertEqual(str(self.plan.notes_file), arguments[arguments.index("--notes-file") + 1])

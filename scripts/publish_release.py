@@ -252,7 +252,7 @@ def publish_release(
         *(str(asset) for asset in plan.assets),
         "--repo", repository,
         "--target", plan.commit,
-        "--title", f"Redmine AI Helper DMSF Extension {plan.tag}",
+        "--title", plan.tag,
         "--notes-file", str(plan.notes_file),
         *(["--prerelease", "--latest=false"] if channel == "prerelease" else ["--latest"]),
     ]

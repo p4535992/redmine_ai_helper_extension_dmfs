@@ -82,6 +82,7 @@ class BuildReleaseTest(unittest.TestCase):
             digest, name = line.split("  ", 1)
             self.assertEqual(hashlib.sha256((output / name).read_bytes()).hexdigest(), digest)
         notes = (output / manifest["notes_file"]).read_text()
+        self.assertTrue(notes.startswith("**Redmine AI Helper DMSF Extension 0.1.0**\n\n"))
         self.assertIn("Current release changes.", notes)
         self.assertNotIn("Previous release only.", notes)
         self.assertIn("real Redmine/DMSF installations", notes)

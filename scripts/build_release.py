@@ -226,7 +226,7 @@ def build_release(repository: Path, requested_output: Path = Path("dist"), relea
         if version != source_version else ""
     )
     notes = (
-        f"# Redmine AI Helper DMSF Extension {version}\n\n{source_version_note}{changes}\n\n"
+        f"**Redmine AI Helper DMSF Extension {version}**\n\n{source_version_note}{changes}\n\n"
         "## Validation scope\n\n"
         "The release workflow publishes after the standalone tests and syntax checks pass. "
         "Those checks use isolated dependency doubles; real Redmine/DMSF installations, "
