@@ -16,7 +16,7 @@ is required.
    release marked Latest; `prerelease` publishes a GitHub prerelease, not Latest.
 
 Both channels package the exact same committed source. The input `0.4.0` labels
-the GitHub tag `v0.4.0` and ZIP/TAR.GZ assets but **does not change version.rb
+the GitHub tag `0.4.0` (no `v`) and ZIP/TAR.GZ assets but **does not change version.rb
 inside the source archive**. If the source says `0.3.0`, the installed plugin
 still reports `0.3.0`. For matching internal version numbers, edit and commit
 `version.rb` before publishing.

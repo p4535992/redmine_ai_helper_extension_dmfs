@@ -74,7 +74,7 @@ def load_manifest(directory: Path, head_sha: str, event_sha: str | None = None) 
     version = manifest.get("version")
     if not isinstance(version, str) or not re.fullmatch(VERSION_PATTERN, version):
         raise ReleaseError("Release version must be a stable X.Y.Z version")
-    tag = f"v{version}"
+    tag = version
     if manifest.get("tag") != tag:
         raise ReleaseError("Release tag does not match its version")
 
@@ -144,7 +144,7 @@ class GitHubAPI:
 
     def get(self, resource: str, missing_ok: bool = False) -> dict[str, Any] | None:
         permitted = (
-            rf"(?:releases/tags/v{VERSION_PATTERN}|git/ref/tags/v{VERSION_PATTERN}|git/tags/{COMMIT_PATTERN})"
+            rf"(?:releases/tags/{VERSION_PATTERN}|git/ref/tags/{VERSION_PATTERN}|git/tags/{COMMIT_PATTERN})"
         )
         if not re.fullmatch(permitted, resource):
             raise ReleaseError("Unsupported GitHub API resource for the release publisher")

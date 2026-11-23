@@ -103,7 +103,7 @@ jobs:
               raise SystemExit("Checkout does not match the selected workflow revision")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               print(f"version={requested}", file=output)
-              print(f"tag=v{requested}", file=output)
+              print(f"tag={requested}", file=output)
               print(f"channel={channel}", file=output)
               print(f"commit={commit}", file=output)
           PY

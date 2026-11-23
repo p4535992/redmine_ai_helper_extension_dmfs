@@ -60,7 +60,7 @@ class BuildReleaseTest(unittest.TestCase):
         manifest = builder.build_release(self.repository)
         output = self.repository / "dist"
         self.assertEqual("0.1.0", manifest["version"])
-        self.assertEqual("v0.1.0", manifest["tag"])
+        self.assertEqual("0.1.0", manifest["tag"])
         self.assertEqual(self.git("rev-parse", "HEAD"), manifest["commit"])
         self.assertEqual(manifest, json.loads((output / "release.json").read_text()))
         expected_files = set(self.git("ls-files").splitlines())
@@ -93,7 +93,7 @@ class BuildReleaseTest(unittest.TestCase):
         manifest = builder.build_release(self.repository, Path("snapshot"), release_version="0.4.0")
         self.assertEqual("0.4.0", manifest["version"])
         self.assertEqual("0.1.0", manifest["source_version"])
-        self.assertEqual("v0.4.0", manifest["tag"])
+        self.assertEqual("0.4.0", manifest["tag"])
         output = self.repository / "snapshot"
         with zipfile.ZipFile(output / manifest["assets"][0]) as archive:
             self.assertIn(b'VERSION = "0.1.0"',
@@ -104,7 +104,7 @@ class BuildReleaseTest(unittest.TestCase):
 
     def test_requested_version_without_changelog_section_still_packages(self):
         manifest = builder.build_release(self.repository, Path("snapshot"), release_version="0.4.0")
-        self.assertEqual("v0.4.0", manifest["tag"])
+        self.assertEqual("0.4.0", manifest["tag"])
         notes = (self.repository / "snapshot" / "release-notes.md").read_text()
         self.assertIn("no matching release changelog entry", notes)
 

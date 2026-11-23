@@ -29,7 +29,7 @@ COMMIT = "a" * 40
 OTHER_COMMIT = "b" * 40
 TAG_OBJECT = "c" * 40
 VERSION = "0.1.0"
-TAG = "v0.1.0"
+TAG = "0.1.0"
 PLUGIN = "redmine_ai_helper_extension_dmfs"
 RELEASE_URL = f"https://github.com/{REPOSITORY}/releases/tag/{TAG}"
 
@@ -116,11 +116,12 @@ class ManifestTests(ArtifactFixtureTest):
                     self.load()
 
     def test_tag_must_match_version(self):
-        self.manifest["tag"] = "v0.2.0"
-        self.write_manifest()
-
-        with self.assertRaises(publisher.ReleaseError):
-            self.load()
+        for tag in ("0.2.0", "v0.1.0"):
+            with self.subTest(tag=tag):
+                self.manifest["tag"] = tag
+                self.write_manifest()
+                with self.assertRaises(publisher.ReleaseError):
+                    self.load()
 
     def test_full_commit_sha_is_required(self):
         for value in (COMMIT[:7], "refs/heads/main", "z" * 40, 123):
@@ -268,8 +269,9 @@ class GitHubAPITests(IsolatedEnvironmentTest):
         opener = FakeOpener()
         api = publisher.GitHubAPI(REPOSITORY, TOKEN, opener=opener)
 
-        with self.assertRaises(publisher.ReleaseError):
-            api.get("../../users/test")
+        for resource in ("../../users/test", f"releases/tags/v{TAG}", f"git/ref/tags/v{TAG}"):
+            with self.subTest(resource=resource), self.assertRaises(publisher.ReleaseError):
+                api.get(resource)
         self.assertEqual([], opener.requests)
 
     def test_annotated_tag_resolves_to_commit(self):
@@ -359,7 +361,7 @@ class PublicationTests(ArtifactFixtureTest):
         self.runner.assert_not_called()
 
     def test_release_response_must_refer_to_the_requested_tag(self):
-        api = FakeAPI([published_release(tag_name="v9.9.9")])
+        api = FakeAPI([published_release(tag_name="9.9.9")])
 
         with self.assertRaises(publisher.ReleaseError):
             self.publish(api)

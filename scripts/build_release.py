@@ -236,7 +236,7 @@ def build_release(repository: Path, requested_output: Path = Path("dist"), relea
     manifest = {
         "version": version,
         "source_version": source_version,
-        "tag": f"v{version}",
+        "tag": version,
         "commit": commit,
         "assets": [*archives, "SHA256SUMS"],
         "notes_file": "release-notes.md",
